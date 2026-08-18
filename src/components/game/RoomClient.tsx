@@ -59,6 +59,8 @@ export function RoomClient({ code }: Props) {
   const [hostTyping, setHostTyping] = useState(false);
   const [guestTyping, setGuestTyping] = useState(false);
   const [soloIndex, setSoloIndex] = useState(0);
+  const roomRef = useRef<RoomRow | null>(null);
+  roomRef.current = room;
 
   const playIndex = SOLO_PREVIEW ? soloIndex : (room?.question_index ?? 0);
   const question = questionAt(playIndex);
@@ -117,6 +119,11 @@ export function RoomClient({ code }: Props) {
     setAnswers((data as AnswerRow[]) ?? []);
   }, []);
 
+  const refreshRoom = useCallback(async (roomId: string) => {
+    const { data } = await getSupabase().from("rooms").select("*").eq("id", roomId).maybeSingle();
+    if (data) setRoom(data as RoomRow);
+  }, []);
+
   useEffect(() => {
     if (!hasSupabaseConfig()) {
       setLoading(false);
@@ -172,10 +179,9 @@ export function RoomClient({ code }: Props) {
 
   useEffect(() => {
     if (!room?.id || !uid) return;
+    const roomId = room.id;
     const supabase = getSupabase();
-    const hostId = room.host_id;
-    const guestId = room.guest_id;
-    const channel = supabase.channel(`room-${room.id}`, {
+    const channel = supabase.channel(`room-${roomId}`, {
       config: { presence: { key: uid } },
     });
     channelRef.current = channel;
@@ -183,11 +189,9 @@ export function RoomClient({ code }: Props) {
     channel
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
-        (payload) => {
-          const next = payload.new as RoomRow;
-          if (!next?.id) return;
-          setRoom(next);
+        { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
+        () => {
+          void refreshRoom(roomId);
         },
       )
       .on(
@@ -196,7 +200,7 @@ export function RoomClient({ code }: Props) {
           event: "INSERT",
           schema: "public",
           table: "submissions",
-          filter: `room_id=eq.${room.id}`,
+          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
           const row = payload.new as SubmissionRow;
@@ -206,6 +210,8 @@ export function RoomClient({ code }: Props) {
             );
             return exists ? prev : [...prev, row];
           });
+          void loadSubmissions(roomId);
+          void refreshRoom(roomId);
         },
       )
       .on(
@@ -214,10 +220,10 @@ export function RoomClient({ code }: Props) {
           event: "*",
           schema: "public",
           table: "ratings",
-          filter: `room_id=eq.${room.id}`,
+          filter: `room_id=eq.${roomId}`,
         },
         () => {
-          void loadRatings(room.id);
+          void loadRatings(roomId);
         },
       )
       .on(
@@ -226,17 +232,19 @@ export function RoomClient({ code }: Props) {
           event: "*",
           schema: "public",
           table: "answer_locks",
-          filter: `room_id=eq.${room.id}`,
+          filter: `room_id=eq.${roomId}`,
         },
         () => {
-          void loadLocks(room.id);
-          void loadAnswers(room.id);
+          void loadLocks(roomId);
+          void loadAnswers(roomId);
         },
       )
       .on("presence", { event: "sync" }, () => {
+        const current = roomRef.current;
+        if (!current) return;
         const state = channel.presenceState<{ typing?: boolean }>();
-        setHostTyping(Boolean(state[hostId]?.[0]?.typing));
-        setGuestTyping(Boolean(guestId && state[guestId]?.[0]?.typing));
+        setHostTyping(Boolean(state[current.host_id]?.[0]?.typing));
+        setGuestTyping(Boolean(current.guest_id && state[current.guest_id]?.[0]?.typing));
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -248,7 +256,7 @@ export function RoomClient({ code }: Props) {
       channelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, [room?.id, uid, room?.host_id, room?.guest_id, loadRatings, loadLocks, loadAnswers]);
+  }, [room?.id, uid, refreshRoom, loadSubmissions, loadRatings, loadLocks, loadAnswers]);
 
   useEffect(() => {
     if (!room) return;
@@ -287,25 +295,49 @@ export function RoomClient({ code }: Props) {
   }, [room, uid, question]);
 
   useEffect(() => {
+    if (!room?.id || room.status === "finished") return;
+    const id = room.id;
+    const t = window.setInterval(() => {
+      void refreshRoom(id);
+      if (roomRef.current?.status === "playing") void loadSubmissions(id);
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [room?.id, room?.status, refreshRoom, loadSubmissions]);
+
+  useEffect(() => {
     if (!room || !question || !mySubmitted || !theirSubmitted) return;
-    if (celebrated.current === question.id) return;
-    celebrated.current = question.id;
-    burstHearts();
-    const t = window.setTimeout(async () => {
-      if (SOLO_PREVIEW) {
-        setSoloIndex((i) => i + 1);
-        return;
-      }
+    if (celebrated.current !== question.id) {
+      celebrated.current = question.id;
+      burstHearts();
+    }
+    if (SOLO_PREVIEW) {
+      const soloT = window.setTimeout(() => setSoloIndex((i) => i + 1), 700);
+      return () => window.clearTimeout(soloT);
+    }
+
+    const roomId = room.id;
+    const questionId = question.id;
+    const fromIndex = room.question_index;
+
+    async function advance() {
+      if (roomRef.current && roomRef.current.question_index !== fromIndex) return;
       const { data } = await getSupabase().rpc("try_advance", {
-        p_room_id: room.id,
-        p_question_id: question.id,
-        p_from_index: room.question_index,
+        p_room_id: roomId,
+        p_question_id: questionId,
+        p_from_index: fromIndex,
         p_total: QUESTIONS.length,
       });
       if (data) setRoom(data as RoomRow);
-    }, 1200);
-    return () => window.clearTimeout(t);
-  }, [room, question, mySubmitted, theirSubmitted]);
+      else void refreshRoom(roomId);
+    }
+
+    const t = window.setTimeout(() => void advance(), 800);
+    const poll = window.setInterval(() => void advance(), 1000);
+    return () => {
+      window.clearTimeout(t);
+      window.clearInterval(poll);
+    };
+  }, [room, question, mySubmitted, theirSubmitted, refreshRoom]);
 
   useEffect(() => {
     if (!room) return;
@@ -380,6 +412,8 @@ export function RoomClient({ code }: Props) {
           created_at: new Date().toISOString(),
         },
       ]);
+      void loadSubmissions(room.id);
+      void refreshRoom(room.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cavab getmədi");
     } finally {
