@@ -61,6 +61,7 @@ export function RoomClient({ code }: Props) {
   const [soloIndex, setSoloIndex] = useState(0);
   const roomRef = useRef<RoomRow | null>(null);
   roomRef.current = room;
+  const guestId = room?.guest_id;
 
   const playIndex = SOLO_PREVIEW ? soloIndex : (room?.question_index ?? 0);
   const question = questionAt(playIndex);
@@ -266,16 +267,19 @@ export function RoomClient({ code }: Props) {
   }, [room?.id, uid, refreshRoom, loadSubmissions, loadRatings, loadLocks, loadAnswers]);
 
   useEffect(() => {
-    if (!room) return;
-    if (bootGuest.current === undefined) return;
-    if (!SOLO_PREVIEW && room.guest_id && room.guest_id !== bootGuest.current) {
-      setWelcome(true);
-      const t = window.setTimeout(() => setWelcome(false), 1800);
-      bootGuest.current = room.guest_id;
-      return () => window.clearTimeout(t);
+    if (bootGuest.current === undefined) {
+      bootGuest.current = guestId ?? null;
+      return;
     }
-    bootGuest.current = room.guest_id;
-  }, [room]);
+    if (SOLO_PREVIEW || !guestId || guestId === bootGuest.current) {
+      bootGuest.current = guestId ?? null;
+      return;
+    }
+    bootGuest.current = guestId;
+    setWelcome(true);
+    const t = window.setTimeout(() => setWelcome(false), 1800);
+    return () => window.clearTimeout(t);
+  }, [guestId]);
 
   useEffect(() => {
     setDraft("");
