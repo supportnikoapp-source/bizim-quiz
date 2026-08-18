@@ -43,11 +43,7 @@ export function HomeScreen() {
 
   function afterWho() {
     if (!who) return;
-    if (SOLO_PREVIEW) {
-      setStep("intro");
-      return;
-    }
-    void enterRoom();
+    setStep("intro");
   }
 
   function afterRules() {

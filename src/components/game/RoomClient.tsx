@@ -299,7 +299,9 @@ export function RoomClient({ code }: Props) {
     const id = room.id;
     const t = window.setInterval(() => {
       void refreshRoom(id);
-      if (roomRef.current?.status === "playing") void loadSubmissions(id);
+      if (roomRef.current?.status !== "waiting" && roomRef.current?.status !== "finished") {
+        void loadSubmissions(id);
+      }
     }, 1000);
     return () => window.clearInterval(t);
   }, [room?.id, room?.status, refreshRoom, loadSubmissions]);
@@ -560,9 +562,13 @@ export function RoomClient({ code }: Props) {
   const host = isHost(room, uid);
   const playAsIlkin = iAmIlkin(room, uid);
   const waiting = SOLO_PREVIEW ? false : !room.guest_id || room.status === "waiting";
-  const intro = SOLO_PREVIEW ? false : room.status === "intro";
-  const rules = SOLO_PREVIEW ? false : room.status === "rules";
-  const playing = SOLO_PREVIEW ? true : room.status === "playing";
+  const intro = false;
+  const rules = false;
+  const playing =
+    SOLO_PREVIEW ||
+    room.status === "playing" ||
+    room.status === "intro" ||
+    room.status === "rules";
   const finale =
     SOLO_PREVIEW
       ? isFinaleIndex(soloIndex)
