@@ -65,6 +65,9 @@ export function FinalChests({
   }
 
   const visibleQuestions = QUESTIONS.filter((q) => q.kind !== "message");
+  const maxStars = visibleQuestions.length * 5;
+  const givenToThem = visibleQuestions.reduce((sum, q) => sum + scoreBy(myId, q.id), 0);
+  const receivedFromThem = visibleQuestions.reduce((sum, q) => sum + scoreBy(theirId ?? "", q.id), 0);
 
   return (
     <div className="mx-auto w-full max-w-[430px] text-center">
@@ -98,6 +101,24 @@ export function FinalChests({
         </button>
         {!theySent ? (
           <p className="mt-3 text-sm text-muted">{theirName} hələ göndərməyib.</p>
+        ) : null}
+
+        {iSent || theySent ? (
+          <div className="mt-5 rounded-[22px] bg-white px-4 py-4 text-left shadow-[0_8px_20px_rgba(40,36,80,0.06)]">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#8b90a5]">Toplam xal</p>
+            <p className="mt-2 text-[15px] text-[#1b2448]">
+              Mən {theirName} cavablarına:{" "}
+              <span className="font-semibold text-[#f0a04b]">
+                {givenToThem} / {maxStars}
+              </span>
+            </p>
+            <p className="mt-1 text-[15px] text-[#1b2448]">
+              {theirName} mənim cavablarıma:{" "}
+              <span className="font-semibold text-[#f0a04b]">
+                {receivedFromThem} / {maxStars}
+              </span>
+            </p>
+          </div>
         ) : null}
       </div>
 

@@ -208,6 +208,9 @@ export function RoomClient({ code }: Props) {
         () => {
           void refreshRoom(roomId);
           void loadSubmissions(roomId);
+          void loadAnswers(roomId);
+          void loadRatings(roomId);
+          void loadLocks(roomId);
         },
       )
       .on(
@@ -289,16 +292,21 @@ export function RoomClient({ code }: Props) {
   }, [room?.question_index, soloIndex]);
 
   useEffect(() => {
-    if (!room?.id || room.status === "finished") return;
+    if (!room?.id) return;
     const id = room.id;
     const t = window.setInterval(() => {
       void refreshRoom(id);
-      if (roomRef.current?.status !== "waiting" && roomRef.current?.status !== "finished") {
-        void loadSubmissions(id);
+      const current = roomRef.current;
+      if (!current || current.status === "waiting") return;
+      void loadSubmissions(id);
+      if (current.status === "finished" || isFinaleIndex(current.question_index)) {
+        void loadAnswers(id);
+        void loadRatings(id);
+        void loadLocks(id);
       }
     }, 1000);
     return () => window.clearInterval(t);
-  }, [room?.id, room?.status, refreshRoom, loadSubmissions]);
+  }, [room?.id, refreshRoom, loadSubmissions, loadAnswers, loadRatings, loadLocks]);
 
   useEffect(() => {
     if (!room || !question) return;
@@ -448,7 +456,8 @@ export function RoomClient({ code }: Props) {
       return false;
     }
     if (data) setRoom(data as RoomRow);
-    void loadAnswers(room.id);
+    await loadAnswers(room.id);
+    await loadRatings(room.id);
     return true;
   }
 
