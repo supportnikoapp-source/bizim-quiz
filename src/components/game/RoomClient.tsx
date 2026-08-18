@@ -549,12 +549,12 @@ export function RoomClient({ code }: Props) {
       <AnimatePresence mode="wait">
         {waiting ? (
           <motion.div key="wait" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <WaitingScreen code={room.code} hostName={room.host_name} />
+            <WaitingScreen waitingName={host ? (room.host_name === "İlkin" ? "Fidan" : "İlkin") : room.host_name} />
           </motion.div>
         ) : intro ? (
           <HostsIntro
             key="intro"
-            who={host ? "ilkin" : "fidan"}
+            who={playAsIlkin ? "ilkin" : "fidan"}
             hideBack
             busy={iAmReady}
             startLabel={iAmReady ? `${partnerName(room, uid)} gözləyirik…` : undefined}

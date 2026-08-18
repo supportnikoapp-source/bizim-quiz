@@ -7,8 +7,7 @@ import { HostsIntro } from "@/components/home/HostsIntro";
 import { RulesScreen } from "@/components/home/RulesScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
 import { SoloPlay } from "@/components/play/SoloPlay";
-import { playerById, type PlayerId } from "@/data/players";
-import { normalizeCode } from "@/lib/codes";
+import { type PlayerId } from "@/data/players";
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { SOLO_PREVIEW } from "@/lib/solo";
@@ -21,8 +20,6 @@ export function HomeScreen() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("who");
   const [who, setWho] = useState<PlayerId | null>(null);
-  const [code, setCode] = useState("");
-  const [askCode, setAskCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,7 +39,6 @@ export function HomeScreen() {
   function pick(id: PlayerId) {
     setWho(id);
     setError("");
-    if (id === "ilkin") setAskCode(false);
   }
 
   function afterWho() {
@@ -67,31 +63,15 @@ export function HomeScreen() {
     setError("");
     setBusy(true);
 
-    if (who === "fidan" && !SOLO_PREVIEW) {
-      if (!askCode) {
-        setAskCode(true);
-        setBusy(false);
-        return;
-      }
-      const next = normalizeCode(code);
-      if (!next || next === "LOVE-") {
-        setError("Oyun kodunu yaz");
-        setBusy(false);
-        return;
-      }
-      router.push(`/o/${next}`);
-      return;
-    }
-
     try {
       await ensureAnonSession();
-      const { data, error: rpcError } = await getSupabase().rpc("create_room", {
-        p_name: playerById(who).name,
+      const { data, error: rpcError } = await getSupabase().rpc("enter_pair_room", {
+        p_who: who,
       });
       if (rpcError) throw rpcError;
       router.push(`/o/${(data as RoomRow).code}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Otaq yaradıla bilmədi");
+      setError(err instanceof Error ? err.message : "Otaq açılmadı");
       setBusy(false);
     }
   }
@@ -123,19 +103,6 @@ export function HomeScreen() {
 
           <h2 className="mb-5 font-serif text-[26px] text-[#1b2448]">Sən kimsən?</h2>
           <WhoAreYou selected={who} onSelect={pick} />
-
-          {askCode && !SOLO_PREVIEW ? (
-            <label className="mt-5 block text-left">
-              <span className="mb-2 block text-xs tracking-wide text-[#8a6a3e]">Oyun kodu</span>
-              <input
-                className="field tracking-[0.18em]"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="LOVE-7K92"
-                autoCapitalize="characters"
-              />
-            </label>
-          ) : null}
 
           <button className="btn mt-6" type="button" disabled={!who || busy} onClick={afterWho}>
             {busy ? "Gözlə…" : "Davam et →"}
