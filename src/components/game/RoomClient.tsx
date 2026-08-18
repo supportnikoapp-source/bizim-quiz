@@ -81,10 +81,12 @@ export function RoomClient({ code }: Props) {
   }, [subs, uid, question]);
 
   const theirSubmitted = useMemo(() => {
-    if (!uid || !question) return false;
+    if (!uid || !question || !room) return false;
     if (SOLO_PREVIEW) return true;
-    return subs.some((s) => s.player_id !== uid && s.question_id === question.id);
-  }, [subs, uid, question]);
+    const partnerId = uid === room.host_id ? room.guest_id : room.host_id;
+    if (!partnerId) return false;
+    return subs.some((s) => s.player_id === partnerId && s.question_id === question.id);
+  }, [subs, uid, question, room]);
 
   const loadSubmissions = useCallback(async (roomId: string) => {
     const { data } = await getSupabase()
@@ -120,8 +122,9 @@ export function RoomClient({ code }: Props) {
   }, []);
 
   const refreshRoom = useCallback(async (roomId: string) => {
-    const { data } = await getSupabase().from("rooms").select("*").eq("id", roomId).maybeSingle();
-    if (data) setRoom(data as RoomRow);
+    const { data, error: qErr } = await getSupabase().from("rooms").select("*").eq("id", roomId).maybeSingle();
+    if (qErr) return;
+    setRoom((data as RoomRow) ?? null);
   }, []);
 
   useEffect(() => {
@@ -149,6 +152,16 @@ export function RoomClient({ code }: Props) {
 
         if (mine) {
           const row = mine as RoomRow;
+          const nav = performance.getEntriesByType("navigation")[0] as
+            | PerformanceNavigationTiming
+            | undefined;
+          const q = questionAt(row.question_index);
+          if (nav?.type === "reload" && q && row.status !== "finished") {
+            await supabase.rpc("clear_my_answer", {
+              p_room_id: row.id,
+              p_question_id: q.id,
+            });
+          }
           setRoom(row);
           bootGuest.current = row.guest_id;
           await loadSubmissions(row.id);
@@ -192,24 +205,18 @@ export function RoomClient({ code }: Props) {
         { event: "*", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
         () => {
           void refreshRoom(roomId);
+          void loadSubmissions(roomId);
         },
       )
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "submissions",
           filter: `room_id=eq.${roomId}`,
         },
-        (payload) => {
-          const row = payload.new as SubmissionRow;
-          setSubs((prev) => {
-            const exists = prev.some(
-              (s) => s.player_id === row.player_id && s.question_id === row.question_id,
-            );
-            return exists ? prev : [...prev, row];
-          });
+        () => {
           void loadSubmissions(roomId);
           void refreshRoom(roomId);
         },
@@ -277,24 +284,6 @@ export function RoomClient({ code }: Props) {
   }, [room?.question_index, soloIndex]);
 
   useEffect(() => {
-    if (!room || !uid || !question) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await getSupabase()
-        .from("answers")
-        .select("body")
-        .eq("room_id", room.id)
-        .eq("player_id", uid)
-        .eq("question_id", question.id)
-        .maybeSingle();
-      if (!cancelled && data?.body) setMySaved(data.body as string);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [room, uid, question]);
-
-  useEffect(() => {
     if (!room?.id || room.status === "finished") return;
     const id = room.id;
     const t = window.setInterval(() => {
@@ -307,14 +296,21 @@ export function RoomClient({ code }: Props) {
   }, [room?.id, room?.status, refreshRoom, loadSubmissions]);
 
   useEffect(() => {
-    if (!room || !question || !mySubmitted || !theirSubmitted) return;
+    if (!room || !question) return;
+    if (SOLO_PREVIEW) {
+      if (!mySubmitted) return;
+      if (celebrated.current !== question.id) {
+        celebrated.current = question.id;
+        burstHearts();
+      }
+      const soloT = window.setTimeout(() => setSoloIndex((i) => i + 1), 700);
+      return () => window.clearTimeout(soloT);
+    }
+    if (!room.guest_id) return;
+    if (!hostSubmitted || !guestSubmitted) return;
     if (celebrated.current !== question.id) {
       celebrated.current = question.id;
       burstHearts();
-    }
-    if (SOLO_PREVIEW) {
-      const soloT = window.setTimeout(() => setSoloIndex((i) => i + 1), 700);
-      return () => window.clearTimeout(soloT);
     }
 
     const roomId = room.id;
@@ -339,7 +335,7 @@ export function RoomClient({ code }: Props) {
       window.clearTimeout(t);
       window.clearInterval(poll);
     };
-  }, [room, question, mySubmitted, theirSubmitted, refreshRoom]);
+  }, [room, question, hostSubmitted, guestSubmitted, mySubmitted, refreshRoom]);
 
   useEffect(() => {
     if (!room) return;
@@ -655,7 +651,7 @@ export function RoomClient({ code }: Props) {
               guestSubmitted={SOLO_PREVIEW ? fidanSubmitted : guestSubmitted}
               hostTyping={hostTyping}
               guestTyping={guestTyping}
-              myAnswer={mySubmitted ? mySaved || draft : draft}
+              myAnswer={draft}
               submitting={submitting}
               error={error}
               locked={Boolean(

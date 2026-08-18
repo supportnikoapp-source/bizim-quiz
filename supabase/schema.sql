@@ -215,40 +215,52 @@ begin
     return to_jsonb(r);
   end if;
 
-  if r.host_id = uid then
-    update public.rooms set host_name = n where id = r.id returning * into r;
-    return to_jsonb(r);
-  end if;
-
-  if r.guest_id is not null and r.guest_id = uid then
-    update public.rooms set guest_name = n where id = r.id returning * into r;
-    return to_jsonb(r);
-  end if;
-
-  if r.host_name = n then
-    update public.rooms set host_id = uid, host_name = n where id = r.id returning * into r;
-    return to_jsonb(r);
-  end if;
-
-  if r.guest_name is not null and r.guest_name = n then
-    update public.rooms set guest_id = uid, guest_name = n where id = r.id returning * into r;
-    return to_jsonb(r);
-  end if;
-
   if r.guest_id is null then
+    if r.host_id = uid or r.host_name = n then
+      update public.rooms
+      set host_id = uid, host_name = n
+      where id = r.id
+      returning * into r;
+    else
+      update public.rooms
+      set guest_id = uid, guest_name = n
+      where id = r.id and guest_id is null
+      returning * into r;
+      if r.guest_id is distinct from uid then
+        raise exception 'Otaq doludur';
+      end if;
+    end if;
+  elsif r.host_id = uid or r.guest_id = uid or r.host_name = n or coalesce(r.guest_name, '') = n then
     update public.rooms
     set
-      guest_id = uid,
-      guest_name = n,
-      status = case when r.status = 'waiting' then 'intro' else r.status end,
-      host_ready = false,
-      guest_ready = false
-    where id = r.id and guest_id is null
+      host_id = uid,
+      host_name = n,
+      guest_id = null,
+      guest_name = null
+    where id = r.id
     returning * into r;
-    return to_jsonb(r);
+  else
+    raise exception 'Otaq doludur';
   end if;
 
-  raise exception 'Otaq doludur';
+  delete from public.submissions where room_id = r.id;
+  delete from public.answers where room_id = r.id;
+  delete from public.ratings where room_id = r.id;
+  delete from public.answer_locks where room_id = r.id;
+
+  update public.rooms
+  set
+    question_index = 0,
+    host_share = false,
+    guest_share = false,
+    host_ready = false,
+    guest_ready = false,
+    share_request_from = null,
+    status = case when guest_id is null then 'waiting' else 'intro' end
+  where id = r.id
+  returning * into r;
+
+  return to_jsonb(r);
 end;
 $$;
 
@@ -389,26 +401,41 @@ as $$
 declare
   r public.rooms;
   uid uuid := auth.uid();
-  n int;
+  host_done boolean;
+  guest_done boolean;
 begin
   if uid is null then
     raise exception 'Not authenticated';
   end if;
 
-  select * into r from public.rooms where id = p_room_id;
+  select * into r from public.rooms where id = p_room_id for update;
   if r.host_id is distinct from uid and r.guest_id is distinct from uid then
     raise exception 'Forbidden';
+  end if;
+
+  if r.guest_id is null then
+    return to_jsonb(r);
   end if;
 
   if r.question_index is distinct from p_from_index then
     return to_jsonb(r);
   end if;
 
-  select count(*) into n
-  from public.submissions
-  where room_id = p_room_id and question_id = p_question_id;
+  select exists (
+    select 1 from public.submissions s
+    where s.room_id = p_room_id
+      and s.question_id = p_question_id
+      and s.player_id = r.host_id
+  ) into host_done;
 
-  if n < 2 then
+  select exists (
+    select 1 from public.submissions s
+    where s.room_id = p_room_id
+      and s.question_id = p_question_id
+      and s.player_id = r.guest_id
+  ) into guest_done;
+
+  if not host_done or not guest_done then
     return to_jsonb(r);
   end if;
 
@@ -637,6 +664,33 @@ begin
 end;
 $$;
 
+create or replace function public.clear_my_answer(p_room_id uuid, p_question_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r public.rooms;
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select * into r from public.rooms where id = p_room_id;
+  if r.host_id is distinct from uid and r.guest_id is distinct from uid then
+    raise exception 'Forbidden';
+  end if;
+
+  delete from public.submissions
+  where room_id = p_room_id and player_id = uid and question_id = p_question_id;
+
+  delete from public.answers
+  where room_id = p_room_id and player_id = uid and question_id = p_question_id;
+end;
+$$;
+
 grant select on table public.rooms to authenticated;
 grant select on table public.submissions to authenticated;
 grant select on table public.answers to authenticated;
@@ -654,6 +708,7 @@ grant execute on function public.rate_answer(uuid, text, int) to authenticated;
 grant select on table public.ratings to authenticated;
 grant select on table public.answer_locks to authenticated;
 grant execute on function public.set_answer_lock(uuid, text, boolean) to authenticated;
+grant execute on function public.clear_my_answer(uuid, text) to authenticated;
 
 do $$
 begin
