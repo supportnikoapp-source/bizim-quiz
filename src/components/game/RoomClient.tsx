@@ -6,7 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { QUESTIONS, isFinaleIndex, questionAt } from "@/data/questions";
 import { burstChests, burstHearts } from "@/lib/confetti";
 import { EVASIVE_MESSAGE, isEvasiveAnswer } from "@/lib/evasive";
-import { normalizeCode } from "@/lib/codes";
+import { answersUrl, normalizeCode, openWhatsAppShare } from "@/lib/codes";
 import {
   iAmIlkin,
   isHost,
@@ -45,6 +45,7 @@ export function RoomClient({ code }: Props) {
   const [ratings, setRatings] = useState<RatingRow[]>([]);
   const [locks, setLocks] = useState<AnswerLockRow[]>([]);
   const [sending, setSending] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [draft, setDraft] = useState("");
   const [mySaved, setMySaved] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -436,7 +437,7 @@ export function RoomClient({ code }: Props) {
   }
 
   async function sendAnswers() {
-    if (!room) return;
+    if (!room) return false;
     setSending(true);
     const { data, error: rpcError } = await getSupabase().rpc("send_answers", {
       p_room_id: room.id,
@@ -444,10 +445,25 @@ export function RoomClient({ code }: Props) {
     setSending(false);
     if (rpcError) {
       setError(rpcError.message);
-      return;
+      return false;
     }
     if (data) setRoom(data as RoomRow);
     void loadAnswers(room.id);
+    return true;
+  }
+
+  async function shareWhatsApp() {
+    if (!room) return;
+    setSharing(true);
+    setError("");
+    const alreadySent = myShare(room, uid);
+    const ok = alreadySent ? true : await sendAnswers();
+    if (!ok) {
+      setSharing(false);
+      return;
+    }
+    openWhatsAppShare(answersUrl(room.code));
+    setSharing(false);
   }
 
   async function rateAnswer(questionId: string, score: number) {
@@ -640,7 +656,9 @@ export function RoomClient({ code }: Props) {
               locks={locks}
               ratings={ratings}
               sending={sending}
+              sharing={sharing}
               onSend={() => void sendAnswers()}
+              onWhatsApp={() => void shareWhatsApp()}
               onRate={(qid, score) => void rateAnswer(qid, score)}
               onToggleLock={(qid, locked) => void setAnswerLock(qid, locked)}
             />

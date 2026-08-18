@@ -10,3 +10,13 @@ export function inviteUrl(code: string): string {
   if (typeof window === "undefined") return "";
   return `${window.location.origin}/o/${code}`;
 }
+
+export function answersUrl(code: string): string {
+  if (typeof window === "undefined") return "";
+  return `${window.location.origin}/bax/${normalizeCode(code)}`;
+}
+
+export function openWhatsAppShare(url: string) {
+  const text = `İlkin – Fidan Quiz\nCavablara bax: ${url}`;
+  window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
