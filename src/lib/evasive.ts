@@ -1,5 +1,4 @@
-export const EVASIVE_MESSAGE =
-  "«Bilmirəm», «nə bilim», «düşünməmişəm» qəbul olunmur. Dürüst yaz. Yalnız dırnaq içində olar.";
+export const EVASIVE_MESSAGE = "Bu cavab qəbul olunmur.";
 
 const FORBIDDEN = [
   "bilmirem",
