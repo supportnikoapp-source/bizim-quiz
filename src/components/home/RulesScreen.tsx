@@ -54,8 +54,8 @@ const RULES: Rule[] = [
     icon: <HandshakeIcon />,
   },
   {
-    title: "Dürüst olmayan cavab yazmaq qadağandır.",
-    text: "«Bilmirəm», yayınmaq və ya doğru olmayan cavab yazmaq olmaz. Hər suala real, dürüst cavab verilməlidir.",
+    title: "Hər suala öz sözünlə cavab ver.",
+    text: "Hər suala real, öz sözünlə cavab verilməlidir.",
     badge: "#e0566b",
     icon: <BanIcon />,
   },
