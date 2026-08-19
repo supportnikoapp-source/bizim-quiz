@@ -19,7 +19,7 @@ type Props = {
   sending?: boolean;
   sharing?: boolean;
   onSend: () => void;
-  onWhatsApp: () => void;
+  onWhatsApp?: () => void;
   onRate: (questionId: string, score: number) => void;
   onToggleLock: (questionId: string, locked: boolean) => void;
 };
@@ -91,14 +91,16 @@ export function FinalChests({
             {sending ? "Göndərilir…" : "Cavablarımı göndər"}
           </button>
         )}
-        <button
-          className="btn mt-3"
-          type="button"
-          disabled={sending || sharing}
-          onClick={onWhatsApp}
-        >
-          {sharing ? "WhatsApp açılır…" : "WhatsApp-la paylaş"}
-        </button>
+        {onWhatsApp ? (
+          <button
+            className="btn mt-3"
+            type="button"
+            disabled={sending || sharing}
+            onClick={onWhatsApp}
+          >
+            {sharing ? "WhatsApp açılır…" : "WhatsApp-la paylaş"}
+          </button>
+        ) : null}
         {!theySent ? (
           <p className="mt-3 text-sm text-muted">{theirName} hələ göndərməyib.</p>
         ) : null}

@@ -462,7 +462,7 @@ export function RoomClient({ code }: Props) {
   }
 
   async function shareWhatsApp() {
-    if (!room) return;
+    if (!room || !uid) return;
     setSharing(true);
     setError("");
     const alreadySent = myShare(room, uid);
