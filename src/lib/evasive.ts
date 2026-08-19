@@ -1,4 +1,4 @@
-export const EVASIVE_MESSAGE = "Bu cavab qəbul olunmur.";
+export const EVASIVE_MESSAGE = "Bu cür cavablar qəbul edilmir.";
 
 const FORBIDDEN = [
   "bilmirem",
