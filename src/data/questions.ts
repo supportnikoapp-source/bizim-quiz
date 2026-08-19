@@ -71,6 +71,12 @@ export const QUESTIONS: Question[] = [
     fidan: "Səncə İlkin stressli olanda nə etməyi daha çox sevir?",
   },
   {
+    id: "q26",
+    kind: "text",
+    ilkin: "Fidanla bağlı onun bildiyi və ya bilmədiyi maraqlı anın nədir?",
+    fidan: "İlkinlə bağlı onun bildiyi və ya bilmədiyi maraqlı anın nədir?",
+  },
+  {
     id: "q11",
     kind: "text",
     ...both("Birlikdə ən xoş xatirəniz hansıdır?"),
