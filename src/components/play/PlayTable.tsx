@@ -44,6 +44,46 @@ export function PlayTable({
   const progress = (index + (hostSubmitted && guestSubmitted ? 1 : 0)) / total;
   const ilkin = PLAYERS[0];
   const fidan = PLAYERS[1];
+  const ilkinCard = (
+    <AnswerCard
+      key="ilkin"
+      name={ilkin.name}
+      image={ilkin.image}
+      theme="blue"
+      question={question.ilkin}
+      mine={iAmHost}
+      submitted={hostSubmitted}
+      typing={!iAmHost && hostTyping}
+      value={iAmHost ? myAnswer : ""}
+      busy={iAmHost && submitting}
+      progress={progress}
+      error={iAmHost ? error : undefined}
+      locked={iAmHost ? locked : undefined}
+      onToggleLock={iAmHost ? onToggleLock : undefined}
+      onChange={iAmHost ? onChange : undefined}
+      onSubmit={iAmHost ? () => onSubmit() : undefined}
+    />
+  );
+  const fidanCard = (
+    <AnswerCard
+      key="fidan"
+      name={fidan.name}
+      image={fidan.image}
+      theme="purple"
+      question={question.fidan}
+      mine={!iAmHost}
+      submitted={guestSubmitted}
+      typing={iAmHost && guestTyping}
+      value={!iAmHost ? myAnswer : ""}
+      busy={!iAmHost && submitting}
+      progress={progress}
+      error={!iAmHost ? error : undefined}
+      locked={!iAmHost ? locked : undefined}
+      onToggleLock={!iAmHost ? onToggleLock : undefined}
+      onChange={!iAmHost ? onChange : undefined}
+      onSubmit={!iAmHost ? () => onSubmit() : undefined}
+    />
+  );
 
   return (
     <div className="fixed inset-0 z-10 overflow-y-auto bg-[#f3f4f6]">
@@ -89,40 +129,17 @@ export function PlayTable({
               />
             ) : (
               <div className="flex flex-col gap-4">
-                <AnswerCard
-                  name={ilkin.name}
-                  image={ilkin.image}
-                  theme="blue"
-                  question={question.ilkin}
-                  mine={iAmHost}
-                  submitted={hostSubmitted}
-                  typing={!iAmHost && hostTyping}
-                  value={iAmHost ? myAnswer : ""}
-                  busy={iAmHost && submitting}
-                  progress={progress}
-                  error={iAmHost ? error : undefined}
-                  locked={iAmHost ? locked : undefined}
-                  onToggleLock={iAmHost ? onToggleLock : undefined}
-                  onChange={iAmHost ? onChange : undefined}
-                  onSubmit={iAmHost ? () => onSubmit() : undefined}
-                />
-                <AnswerCard
-                  name={fidan.name}
-                  image={fidan.image}
-                  theme="purple"
-                  question={question.fidan}
-                  mine={!iAmHost}
-                  submitted={guestSubmitted}
-                  typing={iAmHost && guestTyping}
-                  value={!iAmHost ? myAnswer : ""}
-                  busy={!iAmHost && submitting}
-                  progress={progress}
-                  error={!iAmHost ? error : undefined}
-                  locked={!iAmHost ? locked : undefined}
-                  onToggleLock={!iAmHost ? onToggleLock : undefined}
-                  onChange={!iAmHost ? onChange : undefined}
-                  onSubmit={!iAmHost ? () => onSubmit() : undefined}
-                />
+                {iAmHost ? (
+                  <>
+                    {ilkinCard}
+                    {fidanCard}
+                  </>
+                ) : (
+                  <>
+                    {fidanCard}
+                    {ilkinCard}
+                  </>
+                )}
               </div>
             )}
           </motion.div>
