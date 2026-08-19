@@ -131,11 +131,6 @@ export const QUESTIONS: Question[] = [
     fidan: "İlkin səni nə qədər sevir?",
   },
   {
-    id: "q10",
-    kind: "text",
-    ...both("Sizin vəziyyətinizi təsvir edəcək hansı əsər və ya film deyə bilərsiniz?"),
-  },
-  {
     id: "q19",
     kind: "text",
     ilkin: "Fidanla bağlı nəyisə dəyişmək imkanın olsaydı, nəyi dəyişərdin?",
