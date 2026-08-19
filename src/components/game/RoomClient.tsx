@@ -678,10 +678,10 @@ export function RoomClient({ code }: Props) {
               question={question}
               index={playIndex}
               iAmHost={playAsIlkin}
-              hostSubmitted={SOLO_PREVIEW ? ilkinSubmitted : hostSubmitted}
-              guestSubmitted={SOLO_PREVIEW ? fidanSubmitted : guestSubmitted}
-              hostTyping={hostTyping}
-              guestTyping={guestTyping}
+              hostSubmitted={ilkinSubmitted}
+              guestSubmitted={fidanSubmitted}
+              hostTyping={room.host_name === "İlkin" ? hostTyping : guestTyping}
+              guestTyping={room.host_name === "İlkin" ? guestTyping : hostTyping}
               myAnswer={draft}
               submitting={submitting}
               error={error}
