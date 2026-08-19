@@ -90,12 +90,6 @@ export const QUESTIONS: Question[] = [
     ...both("İkinizdən kim “mən də ona yazmayacam” deyib, sonda yenə yazardı?"),
   },
   {
-    id: "q17",
-    kind: "text",
-    ilkin: "Fidan səndən uzaqlaşanda onu geri qaytarmağa çalışardın?",
-    fidan: "İlkin səndən uzaqlaşanda onu geri qaytarmağa çalışardın?",
-  },
-  {
     id: "q18",
     kind: "text",
     ilkin: "Fidan qərar verəndə daha çox ürəyinə, yoxsa ağlına qulaq asır?",
