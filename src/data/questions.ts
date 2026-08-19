@@ -89,7 +89,7 @@ export const QUESTIONS: Question[] = [
   {
     id: "q13",
     kind: "text",
-    ...both("İkinizdən hansı ilk addımı atmağa daha çox çəkinir?"),
+    ...both("İkinizdən hansı addım atmağa daha çox çəkinir?"),
   },
   {
     id: "q14",
