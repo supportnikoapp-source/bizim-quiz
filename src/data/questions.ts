@@ -59,6 +59,18 @@ export const QUESTIONS: Question[] = [
     ...both("İkinizin birlikdə keçirdiyi bir günün olmasını istəsəydin, o gün necə keçərdi?"),
   },
   {
+    id: "q24",
+    kind: "text",
+    ilkin: "Səncə Fidanın ən xoşladığı aktivitə-hobbi nədir?",
+    fidan: "Səncə İlkinin ən xoşladığı aktivitə-hobbi nədir?",
+  },
+  {
+    id: "q25",
+    kind: "text",
+    ilkin: "Səncə Fidan stressli olanda nə etməyi daha çox sevir?",
+    fidan: "Səncə İlkin stressli olanda nə etməyi daha çox sevir?",
+  },
+  {
     id: "q11",
     kind: "text",
     ...both("Birlikdə ən xoş xatirəniz hansıdır?"),
