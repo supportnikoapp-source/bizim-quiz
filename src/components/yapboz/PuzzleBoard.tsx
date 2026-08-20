@@ -1,11 +1,21 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { PlayerPhoto } from "@/components/ui/PlayerPhoto";
 
-export const PUZZLE_COLS = 4;
-export const PUZZLE_ROWS = 3;
+export const PUZZLE_COLS = 3;
+export const PUZZLE_ROWS = 4;
 export const PUZZLE_TOTAL = PUZZLE_COLS * PUZZLE_ROWS;
+
+export type PuzzleSlots = (number | null)[];
+
+export function emptySlots(): PuzzleSlots {
+  return Array.from({ length: PUZZLE_TOTAL }, () => null);
+}
+
+export function puzzleComplete(slots: PuzzleSlots) {
+  return slots.length === PUZZLE_TOTAL && slots.every((piece, i) => piece === i);
+}
 
 type Props = {
   image: string;
@@ -13,8 +23,8 @@ type Props = {
   avatar: string;
   theme: "blue" | "pink";
   mine: boolean;
-  placed: number[];
-  onPlace?: (index: number) => void;
+  slots: PuzzleSlots;
+  onSlots?: (slots: PuzzleSlots) => void;
 };
 
 const THEMES = {
@@ -34,17 +44,6 @@ const THEMES = {
   },
 };
 
-function pieceStyle(index: number, image: string): CSSProperties {
-  const col = index % PUZZLE_COLS;
-  const row = Math.floor(index / PUZZLE_COLS);
-  return {
-    backgroundImage: `url(${image})`,
-    backgroundRepeat: "no-repeat",
-    backgroundSize: `${PUZZLE_COLS * 100}% ${PUZZLE_ROWS * 100}%`,
-    backgroundPosition: `${(col / (PUZZLE_COLS - 1)) * 100}% ${(row / (PUZZLE_ROWS - 1)) * 100}%`,
-  };
-}
-
 function PieceArt({
   index,
   image,
@@ -54,37 +53,46 @@ function PieceArt({
   image: string;
   className?: string;
 }) {
+  const col = index % PUZZLE_COLS;
+  const row = Math.floor(index / PUZZLE_COLS);
   return (
-    <div
-      className={`pointer-events-none overflow-hidden ${className ?? ""}`}
-      style={pieceStyle(index, image)}
-      aria-hidden
-    />
+    <div className={`pointer-events-none relative overflow-hidden ${className ?? ""}`} aria-hidden>
+      <img
+        src={image}
+        alt=""
+        draggable={false}
+        className="absolute max-w-none object-cover object-center"
+        style={{
+          width: `${PUZZLE_COLS * 100}%`,
+          height: `${PUZZLE_ROWS * 100}%`,
+          left: `${-col * 100}%`,
+          top: `${-row * 100}%`,
+        }}
+      />
+    </div>
   );
 }
 
-export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace }: Props) {
+export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }: Props) {
   const t = THEMES[theme];
   const [picked, setPicked] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ index: number; x: number; y: number; over: number | null } | null>(null);
-  const [loose, setLoose] = useState<(number | null)[]>(() => Array(PUZZLE_TOTAL).fill(null));
   const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const boardRef = useRef<HTMLDivElement | null>(null);
-  const placedRef = useRef(placed);
-  placedRef.current = placed;
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
   const shuffleRef = useRef<number[] | null>(null);
   if (!shuffleRef.current) {
     shuffleRef.current = Array.from({ length: PUZZLE_TOTAL }, (_, i) => i).sort(() => Math.random() - 0.5);
   }
 
-  const sitting = new Set(loose.filter((p): p is number => p !== null));
-  const tray = shuffleRef.current.filter((i) => !placed.includes(i) && !sitting.has(i));
+  const sitting = new Set(slots.filter((p): p is number => p !== null));
+  const tray = shuffleRef.current.filter((i) => !sitting.has(i));
   const row1 = tray.slice(0, Math.ceil(tray.length / 2));
   const row2 = tray.slice(Math.ceil(tray.length / 2));
 
-  function pieceInSlot(slot: number) {
-    if (placed.includes(slot)) return slot;
-    return loose[slot];
+  function lockedSlot(slot: number) {
+    return slotsRef.current[slot] === slot;
   }
 
   function nearestSlot(x: number, y: number) {
@@ -92,7 +100,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
     let best: number | null = null;
     let bestDist = Infinity;
     for (let i = 0; i < PUZZLE_TOTAL; i++) {
-      if (placedRef.current.includes(i)) continue;
+      if (lockedSlot(i)) continue;
       const el = slotRefs.current[i];
       if (!el) continue;
       const r = el.getBoundingClientRect();
@@ -111,18 +119,10 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
   }
 
   function dropOn(piece: number, slot: number) {
-    if (!mine || placedRef.current.includes(slot)) return;
-    if (piece === slot) {
-      setLoose((prev) => prev.map((p) => (p === piece ? null : p)));
-      onPlace?.(slot);
-      setPicked(null);
-      return;
-    }
-    setLoose((prev) => {
-      const next = prev.map((p) => (p === piece ? null : p));
-      next[slot] = piece;
-      return next;
-    });
+    if (!mine || !onSlots || lockedSlot(slot)) return;
+    const next = slotsRef.current.map((p) => (p === piece ? null : p));
+    next[slot] = piece;
+    onSlots(next);
     setPicked(null);
   }
 
@@ -219,34 +219,35 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
       <button
         key={i}
         type="button"
-        onTouchStart={(e) => onTrayTouch(e, i)}
-        onPointerDown={(e) => onTrayPointer(e, i)}
-        className={`aspect-square touch-none overflow-hidden rounded-[4px] ${
+        disabled={!mine}
+        onTouchStart={mine ? (e) => onTrayTouch(e, i) : undefined}
+        onPointerDown={mine ? (e) => onTrayPointer(e, i) : undefined}
+        className={`aspect-square overflow-hidden rounded-[4px] ${mine ? "touch-none" : ""} ${
           picked === i || drag?.index === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
         } ${drag?.index === i ? "opacity-25" : ""}`}
       >
-        <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
+        <PieceArt index={i} image={image} className="h-full w-full" />
       </button>
     );
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 px-2">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 px-1.5">
       <div className="flex items-center gap-2">
-        <div className={`h-9 w-9 overflow-hidden rounded-full ring-2 ${t.ring}`}>
-          <PlayerPhoto src={avatar} alt={name} size={36} className="h-full w-full object-cover" />
+        <div className={`h-8 w-8 overflow-hidden rounded-full ring-2 ${t.ring}`}>
+          <PlayerPhoto src={avatar} alt={name} size={32} className="h-full w-full object-cover" />
         </div>
-        <p className={`text-[15px] font-bold ${t.name}`}>{name}</p>
+        <p className={`text-[14px] font-bold ${t.name}`}>{name}</p>
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <div
           ref={boardRef}
-          className={`grid aspect-[4/3] h-full max-h-full w-auto max-w-full grid-cols-4 grid-rows-3 gap-[2px] overflow-hidden rounded-xl border-4 ${t.board}`}
+          className={`grid aspect-[3/4] h-full max-h-full w-auto max-w-full grid-cols-3 grid-rows-4 gap-[2px] overflow-hidden rounded-xl border-4 ${t.board}`}
         >
           {Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
-            const sittingPiece = pieceInSlot(i);
-            const locked = placed.includes(i);
+            const sittingPiece = slots[i];
+            const locked = sittingPiece === i;
             const shown = drag?.index === sittingPiece ? null : sittingPiece;
             return (
               <button
@@ -283,7 +284,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
                   if (!mine || locked) return;
                   if (picked !== null) dropOn(picked, i);
                 }}
-                className={`relative aspect-square touch-none overflow-hidden ${
+                className={`relative aspect-square overflow-hidden ${mine ? "touch-none" : ""} ${
                   drag?.over === i ? "ring-2 ring-white" : picked !== null && !locked ? "bg-white/50" : "bg-white/30"
                 }`}
               >
@@ -298,26 +299,20 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
         </div>
       </div>
 
-      {mine ? (
-        <div className={`select-none rounded-2xl border-2 px-1.5 py-1 ${t.tray}`}>
-          <div className="grid grid-cols-6 gap-1">
-            {row1.map(trayButton)}
-            {Array.from({ length: Math.max(0, 6 - row1.length) }, (_, k) => (
-              <div key={`e1-${k}`} className="aspect-square" />
-            ))}
-          </div>
-          <div className="mt-1 grid grid-cols-6 gap-1">
-            {row2.map(trayButton)}
-            {Array.from({ length: Math.max(0, 6 - row2.length) }, (_, k) => (
-              <div key={`e2-${k}`} className="aspect-square" />
-            ))}
-          </div>
+      <div className={`select-none rounded-2xl border-2 px-1.5 py-1 ${t.tray}`}>
+        <div className="grid grid-cols-6 gap-1">
+          {row1.map(trayButton)}
+          {Array.from({ length: Math.max(0, 6 - row1.length) }, (_, k) => (
+            <div key={`e1-${k}`} className="aspect-square" />
+          ))}
         </div>
-      ) : (
-        <p className="h-8 text-center text-[12px] text-[#9ca3af]">
-          {placed.length}/{PUZZLE_TOTAL}
-        </p>
-      )}
+        <div className="mt-1 grid grid-cols-6 gap-1">
+          {row2.map(trayButton)}
+          {Array.from({ length: Math.max(0, 6 - row2.length) }, (_, k) => (
+            <div key={`e2-${k}`} className="aspect-square" />
+          ))}
+        </div>
+      </div>
 
       {drag ? (
         <div

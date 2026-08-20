@@ -6,7 +6,7 @@ import { PLAYERS, playerById, type PlayerId } from "@/data/players";
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "./LandscapeFrame";
-import { PuzzleBoard, PUZZLE_TOTAL } from "./PuzzleBoard";
+import { emptySlots, PuzzleBoard, puzzleComplete, type PuzzleSlots } from "./PuzzleBoard";
 
 type Props = {
   who: PlayerId;
@@ -17,7 +17,7 @@ type Presence = {
   who: PlayerId;
   session: string;
   ready: boolean;
-  placed: number[];
+  slots: PuzzleSlots;
   won: boolean;
 };
 
@@ -29,25 +29,35 @@ function latest<T>(rows: T[] | undefined) {
   return rows[rows.length - 1];
 }
 
+function readSlots(row: Presence): PuzzleSlots {
+  const raw = row.slots;
+  if (Array.isArray(raw) && raw.length === emptySlots().length) {
+    return raw.map((p) => (typeof p === "number" ? p : null));
+  }
+  return emptySlots();
+}
+
 export function YapbozScreen({ who, onBack }: Props) {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [placed, setPlaced] = useState<number[]>([]);
-  const [theirPlaced, setTheirPlaced] = useState<number[]>([]);
+  const [mySlots, setMySlots] = useState<PuzzleSlots>(emptySlots);
+  const [theirSlots, setTheirSlots] = useState<PuzzleSlots>(emptySlots);
   const [theyHere, setTheyHere] = useState(false);
   const [winner, setWinner] = useState<PlayerId | null>(null);
   const [peeks, setPeeks] = useState(PEEK_MAX);
   const [showPeek, setShowPeek] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const placedRef = useRef<number[]>([]);
+  const slotsRef = useRef<PuzzleSlots>(emptySlots());
   const readyRef = useRef(false);
   const theyReadyRef = useRef(false);
+  const winnerRef = useRef<PlayerId | null>(null);
   const sessionRef = useRef(crypto.randomUUID());
   const armedRef = useRef(false);
-  placedRef.current = placed;
+  slotsRef.current = mySlots;
   readyRef.current = ready;
+  winnerRef.current = winner;
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
@@ -77,7 +87,7 @@ export function YapbozScreen({ who, onBack }: Props) {
           const state = channel.presenceState<Presence>();
           let partnerHere = false;
           let partnerReady = false;
-          let partnerPlaced: number[] = [];
+          let partnerSlots = emptySlots();
           let win: PlayerId | null = null;
 
           for (const rows of Object.values(state)) {
@@ -85,14 +95,17 @@ export function YapbozScreen({ who, onBack }: Props) {
             if (!row || row.who === who) continue;
             partnerHere = true;
             partnerReady = Boolean(row.ready);
-            partnerPlaced = row.placed ?? [];
+            partnerSlots = readSlots(row);
             if (row.won) win = row.who;
           }
 
           theyReadyRef.current = partnerReady;
           setTheyHere(partnerHere);
-          setTheirPlaced(partnerPlaced);
-          if (win && readyRef.current) setWinner(win);
+          setTheirSlots(partnerSlots);
+          if (win && readyRef.current) {
+            winnerRef.current = win;
+            setWinner(win);
+          }
           if (partnerReady && readyRef.current) setPlaying(true);
         };
 
@@ -104,7 +117,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             who,
             session,
             ready: false,
-            placed: [],
+            slots: emptySlots(),
             won: false,
           } satisfies Presence);
           if (cancelled) return;
@@ -132,7 +145,7 @@ export function YapbozScreen({ who, onBack }: Props) {
       who,
       session: sessionRef.current,
       ready,
-      placed: placedRef.current,
+      slots: slotsRef.current,
       won: false,
       ...next,
     } satisfies Presence);
@@ -146,13 +159,18 @@ export function YapbozScreen({ who, onBack }: Props) {
     if (theyReadyRef.current) setPlaying(true);
   }
 
-  async function placePiece(index: number) {
-    if (winner || placed.includes(index)) return;
-    const next = [...placed, index];
-    setPlaced(next);
-    const won = next.length >= PUZZLE_TOTAL;
-    await track({ ready: true, placed: next, won });
-    if (won) setWinner(who);
+  function updateSlots(next: PuzzleSlots) {
+    if (winnerRef.current) return;
+    slotsRef.current = next;
+    setMySlots(next);
+    void track({ ready: true, slots: next });
+  }
+
+  async function pressDone() {
+    if (winnerRef.current || !puzzleComplete(slotsRef.current)) return;
+    winnerRef.current = who;
+    setWinner(who);
+    await track({ ready: true, won: true });
   }
 
   function peek() {
@@ -165,6 +183,7 @@ export function YapbozScreen({ who, onBack }: Props) {
   const waitingPartner = !connected || !theyHere;
   const myPuzzleImage = who === "ilkin" ? "/puzzles/fidan.png" : "/puzzles/ilkin.png";
   const partnerName = who === "ilkin" ? "Fidan" : "İlkin";
+  const myComplete = puzzleComplete(mySlots);
 
   return (
     <LandscapeFrame>
@@ -204,16 +223,16 @@ export function YapbozScreen({ who, onBack }: Props) {
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
             <div className="flex max-h-[58%] w-full justify-center gap-4">
               {PLAYERS.map((p) => (
-                <figure key={p.id} className="flex w-[38%] flex-col items-center">
+                <figure key={p.id} className="flex h-full w-[38%] flex-col items-center">
                   <div
-                    className={`overflow-hidden rounded-2xl border-4 ${
+                    className={`flex max-h-[46vh] overflow-hidden rounded-2xl border-4 ${
                       p.id === "ilkin" ? "border-[#93c5fd]" : "border-[#f9a8d4]"
                     }`}
                   >
                     <img
                       src={p.id === "ilkin" ? "/puzzles/ilkin.png" : "/puzzles/fidan.png"}
                       alt={p.name}
-                      className="h-full max-h-[46vh] w-full object-cover"
+                      className="h-full max-h-[46vh] w-auto object-contain"
                     />
                   </div>
                   <figcaption className="mt-1 text-sm font-bold">{p.name}</figcaption>
@@ -240,25 +259,36 @@ export function YapbozScreen({ who, onBack }: Props) {
             )}
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 gap-2">
-            <PuzzleBoard
-              image="/puzzles/fidan.png"
-              name="İlkin"
-              avatar={PLAYERS[0].image}
-              theme="blue"
-              mine={who === "ilkin"}
-              placed={who === "ilkin" ? placed : theirPlaced}
-              onPlace={who === "ilkin" ? placePiece : undefined}
-            />
-            <PuzzleBoard
-              image="/puzzles/ilkin.png"
-              name="Fidan"
-              avatar={PLAYERS[1].image}
-              theme="pink"
-              mine={who === "fidan"}
-              placed={who === "fidan" ? placed : theirPlaced}
-              onPlace={who === "fidan" ? placePiece : undefined}
-            />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 gap-2">
+              <PuzzleBoard
+                image="/puzzles/fidan.png"
+                name="İlkin"
+                avatar={PLAYERS[0].image}
+                theme="blue"
+                mine={who === "ilkin"}
+                slots={who === "ilkin" ? mySlots : theirSlots}
+                onSlots={who === "ilkin" ? updateSlots : undefined}
+              />
+              <PuzzleBoard
+                image="/puzzles/ilkin.png"
+                name="Fidan"
+                avatar={PLAYERS[1].image}
+                theme="pink"
+                mine={who === "fidan"}
+                slots={who === "fidan" ? mySlots : theirSlots}
+                onSlots={who === "fidan" ? updateSlots : undefined}
+              />
+            </div>
+            {myComplete && !winner ? (
+              <button
+                type="button"
+                onClick={() => void pressDone()}
+                className="mx-auto mt-1 min-h-[42px] rounded-full bg-[#16a34a] px-10 text-[16px] font-bold text-white shadow"
+              >
+                Bitdi
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -268,7 +298,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 p-6"
             onClick={() => setShowPeek(false)}
           >
-            <img src={myPuzzleImage} alt="Orijinal" className="max-h-[82%] max-w-[55%] rounded-2xl object-contain" />
+            <img src={myPuzzleImage} alt="Orijinal" className="max-h-[82%] max-w-[40%] rounded-2xl object-contain" />
           </button>
         ) : null}
 
