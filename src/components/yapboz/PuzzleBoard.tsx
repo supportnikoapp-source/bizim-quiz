@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useId, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
 import { PlayerPhoto } from "@/components/ui/PlayerPhoto";
 
 export const PUZZLE_COLS = 4;
@@ -137,39 +137,66 @@ function PieceArt({
 export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace }: Props) {
   const t = THEMES[theme];
   const [picked, setPicked] = useState<number | null>(null);
-  const [shake, setShake] = useState<number | null>(null);
   const [drag, setDrag] = useState<{ index: number; x: number; y: number; over: number | null } | null>(null);
+  const [loose, setLoose] = useState<(number | null)[]>(() => Array(PUZZLE_TOTAL).fill(null));
   const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const placedRef = useRef(placed);
+  const looseRef = useRef(loose);
   placedRef.current = placed;
+  looseRef.current = loose;
   const shuffleRef = useRef<number[] | null>(null);
   if (!shuffleRef.current) {
     shuffleRef.current = Array.from({ length: PUZZLE_TOTAL }, (_, i) => i).sort(() => Math.random() - 0.5);
   }
-  const tray = shuffleRef.current.filter((i) => !placed.includes(i));
+
+  const sitting = new Set(loose.filter((p): p is number => p !== null));
+  const tray = shuffleRef.current.filter((i) => !placed.includes(i) && !sitting.has(i));
   const row1 = tray.slice(0, Math.ceil(tray.length / 2));
   const row2 = tray.slice(Math.ceil(tray.length / 2));
 
-  function slotAt(x: number, y: number) {
+  function pieceInSlot(slot: number) {
+    if (placed.includes(slot)) return slot;
+    return loose[slot];
+  }
+
+  function nearestSlot(x: number, y: number) {
+    const board = boardRef.current?.getBoundingClientRect();
+    let best: number | null = null;
+    let bestDist = Infinity;
     for (let i = 0; i < PUZZLE_TOTAL; i++) {
       if (placedRef.current.includes(i)) continue;
       const el = slotRefs.current[i];
       if (!el) continue;
       const r = el.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
+      const dist = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
     }
-    return null;
+    if (!board) return bestDist < 90 ? best : null;
+    const inside =
+      x >= board.left - 12 && x <= board.right + 12 && y >= board.top - 12 && y <= board.bottom + 12;
+    if (inside) return best;
+    return bestDist < 90 ? best : null;
   }
 
-  function tryPlace(piece: number, slot: number) {
+  function dropOn(piece: number, slot: number) {
     if (!mine || placedRef.current.includes(slot)) return;
     if (piece === slot) {
+      setLoose((prev) => prev.map((p) => (p === piece ? null : p)));
       onPlace?.(slot);
       setPicked(null);
       return;
     }
-    setShake(slot);
-    window.setTimeout(() => setShake(null), 280);
+    setLoose((prev) => {
+      const next = prev.map((p) => (p === piece ? null : p));
+      next[slot] = piece;
+      return next;
+    });
+    setPicked(null);
   }
 
   function pickPiece(index: number) {
@@ -177,41 +204,87 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
     setPicked((cur) => (cur === index ? null : index));
   }
 
-  function startDrag(e: ReactPointerEvent<HTMLButtonElement>, index: number) {
+  function beginDrag(index: number, startX: number, startY: number, pointerId: number, kind: "touch" | "pointer") {
     if (!mine) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const pointerId = e.pointerId;
-    const startX = e.clientX;
-    const startY = e.clientY;
     let moved = false;
+    let lastX = startX;
+    let lastY = startY;
 
-    const onMove = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
-      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+    const onMove = (x: number, y: number) => {
+      lastX = x;
+      lastY = y;
+      if (!moved && Math.hypot(x - startX, y - startY) < 6) return;
       moved = true;
-      ev.preventDefault();
       setPicked(index);
-      setDrag({ index, x: ev.clientX, y: ev.clientY, over: slotAt(ev.clientX, ev.clientY) });
+      setDrag({ index, x, y, over: nearestSlot(x, y) });
     };
-    const onUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerId) return;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+
+    const finish = () => {
       setDrag(null);
       if (!moved) {
         pickPiece(index);
         return;
       }
-      const slot = slotAt(ev.clientX, ev.clientY);
-      if (slot !== null) tryPlace(index, slot);
+      const slot = nearestSlot(lastX, lastY);
+      if (slot !== null) dropOn(index, slot);
     };
 
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    if (kind === "touch") {
+      const move = (ev: TouchEvent) => {
+        const t = Array.from(ev.touches).find((item) => item.identifier === pointerId);
+        if (!t) return;
+        ev.preventDefault();
+        onMove(t.clientX, t.clientY);
+      };
+      const up = (ev: TouchEvent) => {
+        const t = Array.from(ev.changedTouches).find((item) => item.identifier === pointerId);
+        if (t) {
+          lastX = t.clientX;
+          lastY = t.clientY;
+        }
+        window.removeEventListener("touchmove", move);
+        window.removeEventListener("touchend", up);
+        window.removeEventListener("touchcancel", up);
+        finish();
+      };
+      window.addEventListener("touchmove", move, { passive: false });
+      window.addEventListener("touchend", up);
+      window.addEventListener("touchcancel", up);
+      return;
+    }
+
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      ev.preventDefault();
+      onMove(ev.clientX, ev.clientY);
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      finish();
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
+
+  function onTrayTouch(e: ReactTouchEvent<HTMLButtonElement>, index: number) {
+    const t = e.changedTouches[0];
+    if (!t) return;
+    e.preventDefault();
+    e.stopPropagation();
+    beginDrag(index, t.clientX, t.clientY, t.identifier, "touch");
+  }
+
+  function onTrayPointer(e: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    if (e.pointerType === "touch") return;
+    e.preventDefault();
+    e.stopPropagation();
+    beginDrag(index, e.clientX, e.clientY, e.pointerId, "pointer");
   }
 
   function trayButton(i: number) {
@@ -219,7 +292,8 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
       <button
         key={i}
         type="button"
-        onPointerDown={(e) => startDrag(e, i)}
+        onTouchStart={(e) => onTrayTouch(e, i)}
+        onPointerDown={(e) => onTrayPointer(e, i)}
         className={`aspect-[3/4] touch-none overflow-visible rounded-md ${
           picked === i || drag?.index === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
         } ${drag?.index === i ? "opacity-25" : ""}`}
@@ -238,35 +312,70 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
         <p className={`text-[15px] font-bold ${t.name}`}>{name}</p>
       </div>
 
-      <div className={`relative grid min-h-0 flex-1 grid-cols-4 grid-rows-3 overflow-visible rounded-2xl border-4 ${t.board}`}>
-        {Array.from({ length: PUZZLE_TOTAL }, (_, i) => (
-          <button
-            key={i}
-            ref={(el) => {
-              slotRefs.current[i] = el;
-            }}
-            type="button"
-            disabled={!mine || placed.includes(i)}
-            onClick={() => {
-              if (picked === null) return;
-              tryPlace(picked, i);
-            }}
-            className={`relative z-0 h-full w-full touch-manipulation ${
-              shake === i ? "z-10 animate-pulse bg-rose-100" : ""
-            } ${drag?.over === i ? "bg-white" : picked !== null && !placed.includes(i) ? "bg-white/40" : ""}`}
-          >
-            {placed.includes(i) ? (
-              <PieceArt index={i} image={image} className="absolute inset-[-22%] h-[144%] w-[144%] drop-shadow" />
-            ) : (
-              <svg
-                viewBox="-22 -22 144 144"
-                className="pointer-events-none absolute inset-[-22%] h-[144%] w-[144%] opacity-35"
-              >
-                <path d={piecePath(i)} fill="white" stroke="#9ca3af" strokeWidth="2" strokeDasharray="5 4" />
-              </svg>
-            )}
-          </button>
-        ))}
+      <div
+        ref={boardRef}
+        className={`relative grid min-h-0 flex-1 grid-cols-4 grid-rows-3 overflow-visible rounded-2xl border-4 ${t.board}`}
+      >
+        {Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
+          const sittingPiece = pieceInSlot(i);
+          const locked = placed.includes(i);
+          const shown = drag?.index === sittingPiece ? null : sittingPiece;
+          return (
+            <button
+              key={i}
+              ref={(el) => {
+                slotRefs.current[i] = el;
+              }}
+              type="button"
+              disabled={!mine || locked}
+              onTouchStart={(e) => {
+                if (!mine || locked) return;
+                const t = e.changedTouches[0];
+                if (!t) return;
+                e.preventDefault();
+                if (picked !== null) {
+                  dropOn(picked, i);
+                  return;
+                }
+                if (sittingPiece !== null) {
+                  beginDrag(sittingPiece, t.clientX, t.clientY, t.identifier, "touch");
+                }
+              }}
+              onPointerDown={(e) => {
+                if (!mine || locked || e.pointerType === "touch") return;
+                if (picked !== null) {
+                  dropOn(picked, i);
+                  return;
+                }
+                if (sittingPiece !== null) {
+                  beginDrag(sittingPiece, e.clientX, e.clientY, e.pointerId, "pointer");
+                }
+              }}
+              onClick={() => {
+                if (!mine || locked) return;
+                if (picked !== null) dropOn(picked, i);
+              }}
+              className={`relative z-0 h-full w-full touch-none ${
+                drag?.over === i ? "bg-white" : picked !== null && !locked ? "bg-white/40" : ""
+              }`}
+            >
+              {shown !== null ? (
+                <PieceArt
+                  index={shown}
+                  image={image}
+                  className={`absolute inset-[-22%] h-[144%] w-[144%] drop-shadow ${locked ? "" : "opacity-95"}`}
+                />
+              ) : (
+                <svg
+                  viewBox="-22 -22 144 144"
+                  className="pointer-events-none absolute inset-[-22%] h-[144%] w-[144%] opacity-35"
+                >
+                  <path d={piecePath(i)} fill="white" stroke="#9ca3af" strokeWidth="2" strokeDasharray="5 4" />
+                </svg>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {mine ? (
