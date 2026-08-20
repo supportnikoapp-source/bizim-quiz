@@ -4,9 +4,10 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HostsIntro } from "@/components/home/HostsIntro";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
+import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro";
+type Step = "who" | "intro" | "yapboz";
 
 export function HomeScreen() {
   const [step, setStep] = useState<Step>("who");
@@ -40,8 +41,10 @@ export function HomeScreen() {
             Davam et →
           </button>
         </motion.div>
+      ) : step === "yapboz" && who ? (
+        <YapbozScreen key="yapboz" who={who} onBack={() => setStep("intro")} />
       ) : who ? (
-        <HostsIntro key="intro" who={who} onBack={() => setStep("who")} />
+        <HostsIntro key="intro" who={who} onBack={() => setStep("who")} onStart={() => setStep("yapboz")} />
       ) : null}
     </AnimatePresence>
   );
