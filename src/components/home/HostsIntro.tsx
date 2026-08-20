@@ -8,7 +8,7 @@ import { Mascots } from "./Mascots";
 type Props = {
   who: PlayerId;
   onBack?: () => void;
-  onStart: () => void;
+  onStart?: () => void;
   hideBack?: boolean;
   busy?: boolean;
   startLabel?: string;
@@ -110,13 +110,13 @@ export function HostsIntro({ who, onBack, onStart, hideBack, busy, startLabel, e
           <span className="font-semibold text-[#24343a]">
             {who === "fidan" ? "İlkinlə" : "Fidanla"}
           </span>{" "}
-          birlikdə bir-biriniz haqqında maraqlı sualları cavablandıracaqsınız. Biz isə
-          sualları verəcək, oyunun gedişinə nəzarət edəcək və hər şeyin qaydasında
-          getməsini təmin edəcəyik. 😁
+          birlikdə oynayacaqsınız. Biz oyunun gedişinə nəzarət edəcək və hər şeyin
+          qaydasında getməsini təmin edəcəyik. 😁
         </p>
         {extra}
       </article>
 
+      {onStart ? (
       <button
         type="button"
         disabled={busy}
@@ -126,6 +126,7 @@ export function HostsIntro({ who, onBack, onStart, hideBack, busy, startLabel, e
         <span>{busy ? "Gözlə…" : startLabel ?? "Hazırsansa, başlayaq! 🚀"}</span>
         <span className="text-xl">→</span>
       </button>
+      ) : null}
       </div>
     </motion.div>
   );
