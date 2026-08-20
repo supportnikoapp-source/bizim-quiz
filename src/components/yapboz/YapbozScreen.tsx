@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYERS, playerById, type PlayerId } from "@/data/players";
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
@@ -15,124 +15,122 @@ type Props = {
 
 type Presence = {
   who: PlayerId;
+  session: string;
   ready: boolean;
   placed: number[];
   won: boolean;
 };
 
-type Room = {
-  id: string;
-  host_name: string;
-  guest_id: string | null;
-  guest_name: string | null;
-};
-
 const PEEK_MAX = 3;
+const CHANNEL = "yapboz-pair";
+
+function latest<T>(rows: T[] | undefined) {
+  if (!rows?.length) return undefined;
+  return rows[rows.length - 1];
+}
 
 export function YapbozScreen({ who, onBack }: Props) {
-  const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [placed, setPlaced] = useState<number[]>([]);
   const [theirPlaced, setTheirPlaced] = useState<number[]>([]);
-  const [theyReady, setTheyReady] = useState(false);
+  const [theyHere, setTheyHere] = useState(false);
   const [winner, setWinner] = useState<PlayerId | null>(null);
   const [peeks, setPeeks] = useState(PEEK_MAX);
   const [showPeek, setShowPeek] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const placedRef = useRef<number[]>([]);
   const readyRef = useRef(false);
+  const theyReadyRef = useRef(false);
+  const sessionRef = useRef(crypto.randomUUID());
+  const armedRef = useRef(false);
   placedRef.current = placed;
   readyRef.current = ready;
 
-  const join = useCallback(async () => {
+  useEffect(() => {
     if (!hasSupabaseConfig()) {
       setError("Supabase yoxdur");
       return;
     }
-    try {
-      await ensureAnonSession();
-      const { data, error: rpcError } = await getSupabase().rpc("enter_pair_room", {
-        p_who: who,
-      });
-      if (rpcError) throw rpcError;
-      setRoom(data as Room);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Otaq açılmadı");
-    }
-  }, [who]);
 
-  useEffect(() => {
-    void join();
-  }, [join]);
-
-  useEffect(() => {
-    if (!room?.id || room.guest_id) return;
-    const t = window.setInterval(async () => {
-      const { data } = await getSupabase()
-        .from("rooms")
-        .select("guest_id, guest_name")
-        .eq("id", room.id)
-        .maybeSingle();
-      if (data?.guest_id) {
-        setRoom((prev) => (prev ? { ...prev, guest_id: data.guest_id, guest_name: data.guest_name } : prev));
-      }
-    }, 1000);
-    return () => window.clearInterval(t);
-  }, [room?.id, room?.guest_id]);
-
-  useEffect(() => {
-    if (!room?.id) return;
+    let cancelled = false;
+    const session = crypto.randomUUID();
+    sessionRef.current = session;
+    armedRef.current = false;
     const supabase = getSupabase();
-    const channel = supabase.channel(`yapboz-${room.id}`, {
-      config: { presence: { key: who } },
-    });
-    channelRef.current = channel;
+    let channel: RealtimeChannel | null = null;
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<Presence>();
-        let partnerReady = false;
-        let partnerPlaced: number[] = [];
-        let win: PlayerId | null = null;
-        let meReady = readyRef.current;
-        for (const rows of Object.values(state)) {
-          const row = rows[0];
-          if (!row) continue;
-          if (row.who !== who) {
+    async function connect() {
+      try {
+        await ensureAnonSession();
+        if (cancelled) return;
+
+        channel = supabase.channel(CHANNEL, {
+          config: { presence: { key: who } },
+        });
+        channelRef.current = channel;
+
+        const applyPresence = () => {
+          if (!channel || !armedRef.current) return;
+          const state = channel.presenceState<Presence>();
+          let partnerHere = false;
+          let partnerReady = false;
+          let partnerPlaced: number[] = [];
+          let win: PlayerId | null = null;
+
+          for (const rows of Object.values(state)) {
+            const row = latest(rows);
+            if (!row || row.who === who) continue;
+            partnerHere = true;
             partnerReady = Boolean(row.ready);
             partnerPlaced = row.placed ?? [];
-          } else if (row.ready) {
-            meReady = true;
+            if (row.won) win = row.who;
           }
-          if (row.won) win = row.who;
-        }
-        setTheyReady(partnerReady);
-        setTheirPlaced(partnerPlaced);
-        if (win) setWinner(win);
-        if (partnerReady && meReady) setPlaying(true);
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
+
+          theyReadyRef.current = partnerReady;
+          setTheyHere(partnerHere);
+          setTheirPlaced(partnerPlaced);
+          if (win && readyRef.current) setWinner(win);
+          if (partnerReady && readyRef.current) setPlaying(true);
+        };
+
+        channel.on("presence", { event: "sync" }, applyPresence);
+
+        channel.subscribe(async (status) => {
+          if (status !== "SUBSCRIBED" || cancelled || !channel) return;
           await channel.track({
             who,
+            session,
             ready: false,
             placed: [],
             won: false,
           } satisfies Presence);
-        }
-      });
+          if (cancelled) return;
+          armedRef.current = true;
+          setConnected(true);
+          applyPresence();
+        });
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Otaq açılmadı");
+      }
+    }
+
+    void connect();
 
     return () => {
+      cancelled = true;
+      armedRef.current = false;
       channelRef.current = null;
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
-  }, [room?.id, who]);
+  }, [who]);
 
   async function track(next: Partial<Presence>) {
     await channelRef.current?.track({
       who,
+      session: sessionRef.current,
       ready,
       placed: placedRef.current,
       won: false,
@@ -141,9 +139,11 @@ export function YapbozScreen({ who, onBack }: Props) {
   }
 
   async function pressStart() {
+    if (!theyHere || readyRef.current) return;
+    readyRef.current = true;
     setReady(true);
     await track({ ready: true });
-    if (theyReady) setPlaying(true);
+    if (theyReadyRef.current) setPlaying(true);
   }
 
   async function placePiece(index: number) {
@@ -162,8 +162,9 @@ export function YapbozScreen({ who, onBack }: Props) {
     window.setTimeout(() => setShowPeek(false), 2200);
   }
 
-  const waitingPartner = Boolean(room && !room.guest_id);
+  const waitingPartner = !connected || !theyHere;
   const myPuzzleImage = who === "ilkin" ? "/puzzles/fidan.png" : "/puzzles/ilkin.png";
+  const partnerName = who === "ilkin" ? "Fidan" : "İlkin";
 
   return (
     <LandscapeFrame>
@@ -225,7 +226,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             </p>
             {waitingPartner ? (
               <p className="text-sm text-[#6b7280]">
-                {who === "ilkin" ? "Fidan" : "İlkin"} gözlənilir…
+                {!connected ? "Qoşulur…" : `${partnerName} gözlənilir…`}
               </p>
             ) : (
               <button
@@ -234,7 +235,7 @@ export function YapbozScreen({ who, onBack }: Props) {
                 onClick={() => void pressStart()}
                 className="min-h-[46px] rounded-full bg-[#3b82f6] px-10 text-[15px] font-semibold text-white disabled:opacity-60"
               >
-                {ready ? "Tərəfi gözləyirik…" : "Başla"}
+                {ready ? `${partnerName} Başla basmasını gözləyirik…` : "Başla"}
               </button>
             )}
           </div>
