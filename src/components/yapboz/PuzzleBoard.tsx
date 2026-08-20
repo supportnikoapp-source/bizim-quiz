@@ -243,7 +243,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <div
           ref={boardRef}
-          className={`grid aspect-[3/4] h-full max-h-full w-auto max-w-full grid-cols-3 grid-rows-4 gap-[2px] overflow-hidden rounded-xl border-4 ${t.board}`}
+          className={`grid aspect-[3/4] h-full max-h-full w-auto max-w-full grid-cols-3 grid-rows-4 gap-0 overflow-hidden rounded-xl border-4 ${t.board}`}
         >
           {Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
             const sittingPiece = slots[i];
@@ -285,7 +285,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }
                   if (picked !== null) dropOn(picked, i);
                 }}
                 className={`relative h-full min-h-0 w-full overflow-hidden ${mine ? "touch-none" : ""} ${
-                  drag?.over === i ? "ring-2 ring-white" : picked !== null && !locked ? "bg-white/50" : "bg-white/30"
+                  drag?.over === i ? "ring-2 ring-inset ring-white/80" : shown === null ? "bg-black/5" : ""
                 }`}
               >
                 {shown !== null ? (
