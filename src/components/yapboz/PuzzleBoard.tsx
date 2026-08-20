@@ -114,7 +114,7 @@ function PieceArt({
   const col = index % PUZZLE_COLS;
   const row = Math.floor(index / PUZZLE_COLS);
   return (
-    <svg viewBox="-22 -22 144 144" className={className} aria-hidden>
+    <svg viewBox="-22 -22 144 144" className={`pointer-events-none ${className ?? ""}`} aria-hidden>
       <defs>
         <clipPath id={clip}>
           <path d={piecePath(index)} />
@@ -178,12 +178,17 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
             type="button"
             disabled={!mine || placed.includes(i)}
             onClick={() => dropOnSlot(i)}
-            className={`relative min-h-0 ${shake === i ? "animate-pulse bg-rose-100" : ""}`}
+            className={`relative z-0 h-full w-full touch-manipulation ${
+              shake === i ? "z-10 animate-pulse bg-rose-100" : ""
+            } ${picked !== null && !placed.includes(i) ? "bg-white/40" : ""}`}
           >
             {placed.includes(i) ? (
               <PieceArt index={i} image={image} className="absolute inset-[-22%] h-[144%] w-[144%] drop-shadow" />
             ) : (
-              <svg viewBox="-22 -22 144 144" className="absolute inset-[-22%] h-[144%] w-[144%] opacity-35">
+              <svg
+                viewBox="-22 -22 144 144"
+                className="pointer-events-none absolute inset-[-22%] h-[144%] w-[144%] opacity-35"
+              >
                 <path d={piecePath(i)} fill="white" stroke="#9ca3af" strokeWidth="2" strokeDasharray="5 4" />
               </svg>
             )}
@@ -199,7 +204,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
                 key={i}
                 type="button"
                 onClick={() => pickPiece(i)}
-                className={`aspect-[3/4] overflow-visible rounded-md ${
+                className={`aspect-[3/4] touch-manipulation overflow-visible rounded-md ${
                   picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
                 }`}
               >
@@ -216,7 +221,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
                 key={i}
                 type="button"
                 onClick={() => pickPiece(i)}
-                className={`aspect-[3/4] overflow-visible rounded-md ${
+                className={`aspect-[3/4] touch-manipulation overflow-visible rounded-md ${
                   picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
                 }`}
               >
