@@ -28,14 +28,14 @@ const THEMES = {
   blue: {
     ring: "ring-[#3b82f6]",
     name: "text-[#2563eb]",
-    board: "border-[#93c5fd] bg-[#dbeafe]",
+    board: "border-[#3b82f6]",
     trail: "#2563eb",
     token: "ring-[#2563eb]",
   },
   pink: {
     ring: "ring-[#f472b6]",
     name: "text-[#db2777]",
-    board: "border-[#f9a8d4] bg-[#fce7f3]",
+    board: "border-[#ec4899]",
     trail: "#db2777",
     token: "ring-[#db2777]",
   },
@@ -94,18 +94,18 @@ export function MazeBoard({
     .join(" ");
 
   return (
-    <section className={`flex h-full min-h-0 min-w-0 flex-1 flex-col ${mine ? "opacity-100" : "opacity-95"}`}>
-      <div className="mb-1 flex items-center justify-center gap-1.5">
-        <div className={`h-7 w-7 overflow-hidden rounded-full ring-2 ${t.ring}`}>
-          <PlayerPhoto src={avatar} alt={name} size={28} className="h-full w-full object-cover" />
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center">
+      <div className="mb-0.5 flex shrink-0 items-center justify-center gap-1">
+        <div className={`h-6 w-6 overflow-hidden rounded-full ring-2 ${t.ring}`}>
+          <PlayerPhoto src={avatar} alt={name} size={24} className="h-full w-full object-cover" />
         </div>
-        <p className={`text-sm font-bold ${t.name}`}>{name}</p>
+        <p className={`text-[13px] font-bold ${t.name}`}>{name}</p>
       </div>
 
-      <div className={`flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl border-4 ${t.board}`}>
+      <div className="flex min-h-0 w-full flex-1 items-center justify-center">
         <div
-          className="relative h-full w-auto max-w-full touch-none select-none"
-          style={{ aspectRatio: `${MAZE_COLS} / ${MAZE_ROWS}` }}
+          className={`relative h-full max-h-full w-auto max-w-full touch-none select-none overflow-hidden rounded-xl border-[3px] bg-white ${t.board}`}
+          style={{ aspectRatio: "1 / 1" }}
           onPointerDown={(e) => {
             if (!onStep) return;
             swipe.current = { x: e.clientX, y: e.clientY };
@@ -126,17 +126,17 @@ export function MazeBoard({
           }}
         >
           <svg viewBox={`0 0 ${MAZE_COLS} ${MAZE_ROWS}`} className="absolute inset-0 h-full w-full">
-            <rect width={MAZE_COLS} height={MAZE_ROWS} fill="#fffaf4" />
+            <rect width={MAZE_COLS} height={MAZE_ROWS} fill="#ffffff" />
             <rect x={goal.c + 0.12} y={goal.r + 0.12} width={0.76} height={0.76} rx={0.18} fill={t.trail} opacity={0.16} />
             {trailD ? (
               <path
                 d={trailD}
                 fill="none"
                 stroke={t.trail}
-                strokeWidth={0.12}
+                strokeWidth={0.1}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeDasharray="0.1 0.16"
+                strokeDasharray="0.08 0.14"
                 opacity={0.85}
               />
             ) : null}
@@ -147,8 +147,8 @@ export function MazeBoard({
                 y1={line.y1}
                 x2={line.x2}
                 y2={line.y2}
-                stroke="#1e293b"
-                strokeWidth={0.1}
+                stroke="#111827"
+                strokeWidth={0.08}
                 strokeLinecap="square"
               />
             ))}
@@ -175,7 +175,7 @@ export function MazeBoard({
           </div>
 
           <div
-            className="pointer-events-none absolute aspect-square h-[9%] overflow-hidden rounded-full opacity-80 ring-2 ring-white"
+            className="pointer-events-none absolute aspect-square h-[7%] overflow-hidden rounded-full opacity-80 ring-2 ring-white"
             style={{
               left: `${((goal.c + 0.5) / MAZE_COLS) * 100}%`,
               top: `${((goal.r + 0.5) / MAZE_ROWS) * 100}%`,
@@ -186,7 +186,7 @@ export function MazeBoard({
           </div>
 
           <div
-            className={`pointer-events-none absolute z-10 aspect-square h-[14%] overflow-hidden rounded-full bg-white shadow ring-2 ${t.token}`}
+            className={`pointer-events-none absolute z-10 aspect-square h-[9%] overflow-hidden rounded-full bg-white shadow ring-2 ${t.token}`}
             style={{
               left: `${((pos.c + 0.5) / MAZE_COLS) * 100}%`,
               top: `${((pos.r + 0.5) / MAZE_ROWS) * 100}%`,
@@ -199,7 +199,7 @@ export function MazeBoard({
         </div>
       </div>
 
-      <p className="mt-1 shrink-0 text-center text-[11px] font-semibold text-[#4b5563]">{footer}</p>
+      <p className="mt-0.5 shrink-0 text-center text-[11px] font-semibold text-[#4b5563]">{footer}</p>
     </section>
   );
 }

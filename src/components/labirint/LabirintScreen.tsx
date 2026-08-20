@@ -311,7 +311,7 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
 
   return (
     <LandscapeFrame hint="Labirint üfüqi ekranda tam görünür">
-      <div className="relative flex h-full w-full flex-col px-3 py-2">
+      <div className="relative flex h-full w-full flex-col px-2 py-1.5">
         <header className="mb-1 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -392,7 +392,7 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex min-h-0 flex-1 items-stretch justify-center gap-2">
               <MazeBoard
                 name="İlkin"
                 avatar={PLAYERS[0].image}
@@ -418,8 +418,8 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
                 onStep={who === "fidan" ? (dir) => moveRef.current(dir) : undefined}
               />
             </div>
-            <div className="mt-1 flex shrink-0 items-center justify-center pb-1">
-              <div className="grid grid-cols-3 grid-rows-3 gap-1">
+            <div className="mt-0.5 flex shrink-0 items-center justify-center">
+              <div className="grid grid-cols-3 grid-rows-3 gap-0.5">
                 <span />
                 <Pad label="▲" onPress={() => startHold("n")} onRelease={endHold} />
                 <span />
@@ -462,7 +462,7 @@ function Pad({
   return (
     <button
       type="button"
-      className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-bold text-[#1e3a5f] shadow"
+      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-[#1e3a5f] shadow"
       onPointerDown={(e) => {
         e.preventDefault();
         onPress();

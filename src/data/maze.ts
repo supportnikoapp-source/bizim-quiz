@@ -2,8 +2,8 @@ export type Dir = "n" | "e" | "s" | "w";
 export type Pos = { r: number; c: number };
 export type CellWalls = Record<Dir, boolean>;
 
-export const MAZE_ROWS = 11;
-export const MAZE_COLS = 9;
+export const MAZE_ROWS = 15;
+export const MAZE_COLS = 15;
 
 const DIRS: { dir: Dir; dr: number; dc: number; opp: Dir }[] = [
   { dir: "n", dr: -1, dc: 0, opp: "s" },
