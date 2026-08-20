@@ -12,6 +12,7 @@ type Props = {
   who: PlayerId;
   onBack: () => void;
   onBothDone: () => void;
+  onSkip?: () => void;
 };
 
 type WireState = {
@@ -66,7 +67,7 @@ function unpackBoard(raw: unknown): PuzzleSlots | null {
   });
 }
 
-export function YapbozScreen({ who, onBack, onBothDone }: Props) {
+export function YapbozScreen({ who, onBack, onBothDone, onSkip }: Props) {
   const partnerWho: PlayerId = who === "ilkin" ? "fidan" : "ilkin";
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
@@ -288,18 +289,29 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
             </h1>
             <p className="text-[11px] text-[#6b7280]">Bir-birimizin şəklini tamamlayırıq 💜</p>
           </div>
-          {playing ? (
-            <button
-              type="button"
-              onClick={peek}
-              disabled={peeks <= 0}
-              className="rounded-xl bg-white px-2 py-1 text-[11px] font-semibold shadow disabled:opacity-40"
-            >
-              Bax ({peeks})
-            </button>
-          ) : (
-            <span className="h-9 w-9" />
-          )}
+          <div className="flex items-center gap-1">
+            {playing ? (
+              <button
+                type="button"
+                onClick={peek}
+                disabled={peeks <= 0}
+                className="rounded-xl bg-white px-2 py-1 text-[11px] font-semibold shadow disabled:opacity-40"
+              >
+                Bax ({peeks})
+              </button>
+            ) : null}
+            {onSkip ? (
+              <button
+                type="button"
+                onClick={onSkip}
+                className="rounded-xl bg-white px-2 py-1 text-[11px] font-semibold text-[#6b7280] shadow"
+              >
+                Keç →
+              </button>
+            ) : playing ? null : (
+              <span className="h-9 w-9" />
+            )}
+          </div>
         </header>
 
         {error ? <p className="text-center text-sm text-rose-500">{error}</p> : null}

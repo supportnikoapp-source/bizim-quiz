@@ -21,6 +21,7 @@ import { MazeBoard } from "./MazeBoard";
 type Props = {
   who: PlayerId;
   onBack: () => void;
+  onSkipLobby?: boolean;
 };
 
 type WireState = {
@@ -43,7 +44,7 @@ function goalOf(id: PlayerId): Pos {
   return id === "ilkin" ? MAZE.fidan : MAZE.ilkin;
 }
 
-export function LabirintScreen({ who, onBack }: Props) {
+export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
   const partnerWho: PlayerId = who === "ilkin" ? "fidan" : "ilkin";
   const myStart = startOf(who);
   const theirStart = startOf(partnerWho);
@@ -326,7 +327,22 @@ export function LabirintScreen({ who, onBack }: Props) {
             </h1>
             <p className="text-[11px] text-[#6b7280]">Bir-birimizə çatmağa çalışırıq 💜</p>
           </div>
-          <span className="h-9 w-9" />
+          {onSkipLobby && !playing ? (
+            <button
+              type="button"
+              onClick={() => {
+                readyRef.current = true;
+                setReady(true);
+                setPlaying(true);
+                void push({ ready: true });
+              }}
+              className="rounded-xl bg-white px-2 py-1 text-[11px] font-semibold text-[#6b7280] shadow"
+            >
+              Keç →
+            </button>
+          ) : (
+            <span className="h-9 w-9" />
+          )}
         </header>
 
         {error ? <p className="text-center text-sm text-rose-500">{error}</p> : null}

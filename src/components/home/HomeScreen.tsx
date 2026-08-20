@@ -10,6 +10,21 @@ import { type PlayerId } from "@/data/players";
 
 type Step = "who" | "intro" | "yapboz" | "labirint";
 
+/** Müvəqqəti yoxlama keçidi — oyunlar bitəndə sil. */
+const DEV_SKIP = true;
+
+function SkipBtn({ onClick, label = "Keç →" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full bg-white/90 px-4 py-2 text-[13px] font-semibold text-[#6b7280] shadow"
+    >
+      {label}
+    </button>
+  );
+}
+
 export function HomeScreen() {
   const [step, setStep] = useState<Step>("who");
   const [who, setWho] = useState<PlayerId | null>(null);
@@ -41,6 +56,12 @@ export function HomeScreen() {
           <button className="btn mt-6" type="button" disabled={!who} onClick={() => setStep("intro")}>
             Davam et →
           </button>
+          {DEV_SKIP && who ? (
+            <div className="mt-3 flex justify-center gap-2">
+              <SkipBtn onClick={() => setStep("yapboz")} label="Yapboza keç" />
+              <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
+            </div>
+          ) : null}
         </motion.div>
       ) : step === "yapboz" && who ? (
         <YapbozScreen
@@ -48,11 +69,30 @@ export function HomeScreen() {
           who={who}
           onBack={() => setStep("intro")}
           onBothDone={() => setStep("labirint")}
+          onSkip={DEV_SKIP ? () => setStep("labirint") : undefined}
         />
       ) : step === "labirint" && who ? (
-        <LabirintScreen key="labirint" who={who} onBack={() => setStep("intro")} />
+        <LabirintScreen
+          key="labirint"
+          who={who}
+          onBack={() => setStep("intro")}
+          onSkipLobby={DEV_SKIP ? true : undefined}
+        />
       ) : who ? (
-        <HostsIntro key="intro" who={who} onBack={() => setStep("who")} onStart={() => setStep("yapboz")} />
+        <HostsIntro
+          key="intro"
+          who={who}
+          onBack={() => setStep("who")}
+          onStart={() => setStep("yapboz")}
+          extra={
+            DEV_SKIP ? (
+              <div className="mt-4 flex justify-center gap-2">
+                <SkipBtn onClick={() => setStep("yapboz")} label="Yapboza keç" />
+                <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
+              </div>
+            ) : null
+          }
+        />
       ) : null}
     </AnimatePresence>
   );
