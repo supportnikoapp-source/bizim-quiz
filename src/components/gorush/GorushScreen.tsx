@@ -174,9 +174,17 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
           const state = channel.presenceState<WireState>();
           for (const [key, rows] of Object.entries(state)) {
             if (key === who) continue;
-            const row = rows[rows.length - 1];
-            if (!row) continue;
-            applyPartner({ ...row, who: (row.who || key) as PlayerId }, key);
+            let best = rows[rows.length - 1];
+            let bestSeq = -1;
+            for (const row of rows) {
+              const s = typeof row.seq === "number" ? row.seq : unpackMeetTrail(row.trail ?? "").length;
+              if (s >= bestSeq) {
+                bestSeq = s;
+                best = row;
+              }
+            }
+            if (!best) continue;
+            applyPartner({ ...best, who: (best.who || key) as PlayerId }, key, true);
           }
         };
 
@@ -187,7 +195,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
           })
           .on("postgres_changes", { event: "*", schema: "public", table: "gorush_state" }, (payload) => {
             const row = payload.new as WireState | undefined;
-            if (row) applyPartner(row);
+            if (row) applyPartner(row, undefined, true);
           });
 
         channel.subscribe(async (status) => {
@@ -221,7 +229,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
 
         poll = window.setInterval(() => {
           void pullPartner();
-        }, 400);
+        }, 300);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Otaq açılmadı");
       }
@@ -273,8 +281,6 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
     const me = startOf(who);
     posRef.current = me;
     trailRef.current = [me];
-    seqRef.current = 0;
-    partnerSeqRef.current = -1;
     setMyPos(me);
     setMyTrail([me]);
     wonRef.current = false;

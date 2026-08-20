@@ -174,7 +174,7 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
             const row = rows[rows.length - 1];
             if (!row) continue;
             partnerHere = true;
-            applyPartner({ ...row, who: (row.who || key) as PlayerId }, key);
+            applyPartner({ ...row, who: (row.who || key) as PlayerId }, key, true);
           }
           if (partnerHere) setTheyHere(true);
         };
@@ -186,7 +186,7 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
           })
           .on("postgres_changes", { event: "*", schema: "public", table: "labirint_state" }, (payload) => {
             const row = payload.new as WireState | undefined;
-            if (row) applyPartner(row);
+            if (row) applyPartner(row, undefined, true);
           });
 
         channel.subscribe(async (status) => {
@@ -271,8 +271,6 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
     const me = startOf(who);
     posRef.current = me;
     trailRef.current = [me];
-    seqRef.current = 0;
-    partnerSeqRef.current = -1;
     setMyPos(me);
     setMyTrail([me]);
     iFinishedRef.current = false;
