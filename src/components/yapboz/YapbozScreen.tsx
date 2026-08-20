@@ -267,16 +267,16 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 items-center justify-center gap-6">
               {PLAYERS.map((p) => (
-                <figure key={p.id} className="flex h-[90%] min-h-0 flex-col items-center">
+                <figure key={p.id} className="flex h-[90%] w-fit min-h-0 flex-col items-center">
                   <div
-                    className={`h-full overflow-hidden rounded-2xl border-4 ${
+                    className={`flex h-full w-fit overflow-hidden rounded-2xl border-4 ${
                       p.id === "ilkin" ? "border-[#93c5fd]" : "border-[#f9a8d4]"
                     }`}
                   >
                     <img
                       src={p.id === "ilkin" ? "/puzzles/ilkin.png" : "/puzzles/fidan.png"}
                       alt={p.name}
-                      className="h-full w-auto object-contain"
+                      className="block h-full w-auto max-w-none"
                     />
                   </div>
                   <figcaption
