@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HostsIntro } from "@/components/home/HostsIntro";
+import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
 import { LabirintScreen } from "@/components/labirint/LabirintScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro" | "yapboz" | "labirint";
+type Step = "who" | "intro" | "yapboz" | "labirint" | "next";
 
 /** Müvəqqəti yoxlama keçidi — oyunlar bitəndə sil. */
 const DEV_SKIP = true;
@@ -76,8 +77,11 @@ export function HomeScreen() {
           key="labirint"
           who={who}
           onBack={() => setStep("intro")}
+          onBothDone={() => setStep("next")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
+      ) : step === "next" && who ? (
+        <NextGameScreen key="next" who={who} onBack={() => setStep("intro")} />
       ) : who ? (
         <HostsIntro
           key="intro"

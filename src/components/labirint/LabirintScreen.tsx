@@ -22,6 +22,7 @@ import { MazeBoard } from "./MazeBoard";
 type Props = {
   who: PlayerId;
   onBack: () => void;
+  onBothDone: () => void;
   onSkipLobby?: boolean;
 };
 
@@ -45,7 +46,7 @@ function goalOf(id: PlayerId): Pos {
   return id === "ilkin" ? MAZE.fidan : MAZE.ilkin;
 }
 
-export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
+export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   const partnerWho: PlayerId = who === "ilkin" ? "fidan" : "ilkin";
   const myStart = startOf(who);
   const theirStart = startOf(partnerWho);
@@ -61,6 +62,8 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
   const [theirTrail, setTheirTrail] = useState<Pos[]>([theirStart]);
   const [theyHere, setTheyHere] = useState(false);
   const [winner, setWinner] = useState<PlayerId | null>(null);
+  const [iFinished, setIFinished] = useState(false);
+  const [theyFinished, setTheyFinished] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const posRef = useRef(myStart);
@@ -77,6 +80,8 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
   const playingRef = useRef(false);
   const livePartnerRef = useRef(false);
   const beginPlayRef = useRef<() => void>(() => {});
+  const onBothDoneRef = useRef(onBothDone);
+  onBothDoneRef.current = onBothDone;
 
   posRef.current = myPos;
   trailRef.current = myTrail;
@@ -119,10 +124,12 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
       }
       if (row.finished && (!stale || livePartnerRef.current)) {
         theyFinishedRef.current = true;
-        if (!iFinishedRef.current && !winnerRef.current) {
+        setTheyFinished(true);
+        if (!winnerRef.current) {
           winnerRef.current = partnerWho;
           setWinner(partnerWho);
         }
+        if (iFinishedRef.current) onBothDoneRef.current();
       }
     }
 
@@ -260,6 +267,8 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
     iFinishedRef.current = false;
     theyFinishedRef.current = false;
     winnerRef.current = null;
+    setIFinished(false);
+    setTheyFinished(false);
     setWinner(null);
     setReady(true);
     readyRef.current = true;
@@ -283,7 +292,7 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
   }
 
   function move(dir: Dir) {
-    if (!playingRef.current || winnerRef.current || iFinishedRef.current) return;
+    if (!playingRef.current || iFinishedRef.current) return;
     const next = stepPos(posRef.current, dir);
     if (!next) return;
     const trail = appendTrail(trailRef.current, next);
@@ -293,10 +302,13 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
     setMyTrail(trail);
     const done = samePos(next, myGoal);
     if (done) {
-      if (theyFinishedRef.current) return;
       iFinishedRef.current = true;
-      winnerRef.current = who;
-      setWinner(who);
+      setIFinished(true);
+      if (!winnerRef.current) {
+        winnerRef.current = who;
+        setWinner(who);
+      }
+      if (theyFinishedRef.current) onBothDoneRef.current();
     }
     void push({
       ready: true,
@@ -465,15 +477,10 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
           </div>
         )}
 
-        {winner ? (
+        {iFinished && !theyFinished ? (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#1b2448]/75 px-6 text-center">
-            <p className="font-serif text-4xl text-white">{iWon ? "Qazandın!" : `${partnerName} qazandı`}</p>
-            <p className="mt-3 text-[16px] text-white/85">
-              {iWon ? "İlk siz çatdınız 💜" : "O biri birinci finişə çatdı"}
-            </p>
-            <button type="button" onClick={onBack} className="btn mt-6 max-w-[220px]">
-              Geri
-            </button>
+            <p className="font-serif text-4xl text-white">{iWon ? "Qazandın!" : "İlk bitirdiniz"}</p>
+            <p className="mt-3 text-[16px] text-white/85">{partnerName} bitirməsi gözlənilir…</p>
           </div>
         ) : null}
       </div>
