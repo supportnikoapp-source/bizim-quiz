@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { PLAYERS, playerById, type PlayerId } from "@/data/players";
+import { PLAYERS, type PlayerId } from "@/data/players";
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "./LandscapeFrame";
@@ -11,6 +11,7 @@ import { emptySlots, PuzzleBoard, puzzleComplete, PUZZLE_TOTAL, type PuzzleSlots
 type Props = {
   who: PlayerId;
   onBack: () => void;
+  onBothDone: () => void;
 };
 
 type WireState = {
@@ -18,7 +19,8 @@ type WireState = {
   session: string;
   ready: boolean;
   board: string;
-  won: boolean;
+  finished: boolean;
+  won?: boolean;
 };
 
 const PEEK_MAX = 3;
@@ -64,7 +66,7 @@ function unpackBoard(raw: unknown): PuzzleSlots | null {
   });
 }
 
-export function YapbozScreen({ who, onBack }: Props) {
+export function YapbozScreen({ who, onBack, onBothDone }: Props) {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [ready, setReady] = useState(false);
@@ -72,19 +74,22 @@ export function YapbozScreen({ who, onBack }: Props) {
   const [mySlots, setMySlots] = useState<PuzzleSlots>(emptySlots);
   const [theirSlots, setTheirSlots] = useState<PuzzleSlots>(emptySlots);
   const [theyHere, setTheyHere] = useState(false);
-  const [winner, setWinner] = useState<PlayerId | null>(null);
+  const [theyFinished, setTheyFinished] = useState(false);
+  const [iFinished, setIFinished] = useState(false);
   const [peeks, setPeeks] = useState(PEEK_MAX);
   const [showPeek, setShowPeek] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const slotsRef = useRef<PuzzleSlots>(emptySlots());
   const readyRef = useRef(false);
   const theyReadyRef = useRef(false);
-  const winnerRef = useRef<PlayerId | null>(null);
+  const iFinishedRef = useRef(false);
+  const theyFinishedRef = useRef(false);
   const sessionRef = useRef(crypto.randomUUID());
   const armedRef = useRef(false);
+  const onBothDoneRef = useRef(onBothDone);
+  onBothDoneRef.current = onBothDone;
   slotsRef.current = mySlots;
   readyRef.current = ready;
-  winnerRef.current = winner;
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
@@ -121,9 +126,10 @@ export function YapbozScreen({ who, onBack }: Props) {
           }
           const nextSlots = unpackBoard(row.board);
           if (nextSlots) setTheirSlots(nextSlots);
-          if (row.won && readyRef.current) {
-            winnerRef.current = row.who;
-            setWinner(row.who);
+          if (row.finished || row.won) {
+            theyFinishedRef.current = true;
+            setTheyFinished(true);
+            if (iFinishedRef.current) onBothDoneRef.current();
           }
         };
 
@@ -152,7 +158,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             session,
             ready: false,
             board: packBoard(emptySlots()),
-            won: false,
+            finished: false,
           } satisfies WireState);
           if (cancelled) return;
           armedRef.current = true;
@@ -174,13 +180,13 @@ export function YapbozScreen({ who, onBack }: Props) {
     };
   }, [who]);
 
-  async function push(next: Partial<Pick<WireState, "ready" | "board" | "won">> = {}) {
+  async function push(next: Partial<Pick<WireState, "ready" | "board" | "finished">> = {}) {
     const payload: WireState = {
       who,
       session: sessionRef.current,
       ready: next.ready ?? readyRef.current,
       board: next.board ?? packBoard(slotsRef.current),
-      won: next.won ?? false,
+      finished: next.finished ?? iFinishedRef.current,
     };
     const ch = channelRef.current;
     if (!ch) return;
@@ -197,17 +203,18 @@ export function YapbozScreen({ who, onBack }: Props) {
   }
 
   function updateSlots(next: PuzzleSlots) {
-    if (winnerRef.current) return;
+    if (iFinishedRef.current) return;
     slotsRef.current = next;
     setMySlots(next);
     void push({ ready: true, board: packBoard(next) });
   }
 
   async function pressDone() {
-    if (winnerRef.current || !puzzleComplete(slotsRef.current)) return;
-    winnerRef.current = who;
-    setWinner(who);
-    await push({ ready: true, won: true });
+    if (iFinishedRef.current || !puzzleComplete(slotsRef.current)) return;
+    iFinishedRef.current = true;
+    setIFinished(true);
+    await push({ ready: true, finished: true });
+    if (theyFinishedRef.current) onBothDoneRef.current();
   }
 
   function peek() {
@@ -302,7 +309,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             )}
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="flex min-h-0 flex-1 gap-2">
               <PuzzleBoard
                 image="/puzzles/fidan.png"
@@ -323,11 +330,11 @@ export function YapbozScreen({ who, onBack }: Props) {
                 onSlots={who === "fidan" ? updateSlots : undefined}
               />
             </div>
-            {myComplete && !winner ? (
+            {myComplete && !iFinished ? (
               <button
                 type="button"
                 onClick={() => void pressDone()}
-                className="mx-auto mt-1 min-h-[42px] rounded-full bg-[#16a34a] px-10 text-[16px] font-bold text-white shadow"
+                className="absolute bottom-3 left-1/2 z-40 min-h-[52px] -translate-x-1/2 rounded-full bg-[#16a34a] px-12 text-[20px] font-black text-white shadow-lg"
               >
                 Bitdi
               </button>
@@ -345,14 +352,10 @@ export function YapbozScreen({ who, onBack }: Props) {
           </button>
         ) : null}
 
-        {winner ? (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#1b2448]/70">
-            <p className="font-serif text-4xl text-white">
-              {winner === who ? "Qazandın! 💜" : `${playerById(winner).name} qazandı`}
-            </p>
-            <button type="button" onClick={onBack} className="btn mt-6 max-w-xs">
-              Geri
-            </button>
+        {iFinished && !theyFinished ? (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#1b2448]/75 px-6 text-center">
+            <p className="font-serif text-4xl text-white">İlk bitirdiniz</p>
+            <p className="mt-3 text-[16px] text-white/85">{partnerName} bitirməsi gözlənilir…</p>
           </div>
         ) : null}
       </div>
