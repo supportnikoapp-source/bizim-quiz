@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HostsIntro } from "@/components/home/HostsIntro";
-import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
+import { LabirintScreen } from "@/components/labirint/LabirintScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro" | "yapboz" | "next";
+type Step = "who" | "intro" | "yapboz" | "labirint";
 
 export function HomeScreen() {
   const [step, setStep] = useState<Step>("who");
@@ -47,10 +47,10 @@ export function HomeScreen() {
           key="yapboz"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("next")}
+          onBothDone={() => setStep("labirint")}
         />
-      ) : step === "next" && who ? (
-        <NextGameScreen key="next" who={who} onBack={() => setStep("intro")} />
+      ) : step === "labirint" && who ? (
+        <LabirintScreen key="labirint" who={who} onBack={() => setStep("intro")} />
       ) : who ? (
         <HostsIntro key="intro" who={who} onBack={() => setStep("who")} onStart={() => setStep("yapboz")} />
       ) : null}
