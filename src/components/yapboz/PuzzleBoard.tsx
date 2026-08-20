@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { PlayerPhoto } from "@/components/ui/PlayerPhoto";
 
 export const PUZZLE_COLS = 4;
@@ -138,6 +138,10 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
   const t = THEMES[theme];
   const [picked, setPicked] = useState<number | null>(null);
   const [shake, setShake] = useState<number | null>(null);
+  const [drag, setDrag] = useState<{ index: number; x: number; y: number; over: number | null } | null>(null);
+  const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const placedRef = useRef(placed);
+  placedRef.current = placed;
   const shuffleRef = useRef<number[] | null>(null);
   if (!shuffleRef.current) {
     shuffleRef.current = Array.from({ length: PUZZLE_TOTAL }, (_, i) => i).sort(() => Math.random() - 0.5);
@@ -146,20 +150,83 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
   const row1 = tray.slice(0, Math.ceil(tray.length / 2));
   const row2 = tray.slice(Math.ceil(tray.length / 2));
 
-  function pickPiece(index: number) {
-    if (!mine) return;
-    setPicked((cur) => (cur === index ? null : index));
+  function slotAt(x: number, y: number) {
+    for (let i = 0; i < PUZZLE_TOTAL; i++) {
+      if (placedRef.current.includes(i)) continue;
+      const el = slotRefs.current[i];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return i;
+    }
+    return null;
   }
 
-  function dropOnSlot(slot: number) {
-    if (!mine || picked === null || placed.includes(slot)) return;
-    if (picked === slot) {
+  function tryPlace(piece: number, slot: number) {
+    if (!mine || placedRef.current.includes(slot)) return;
+    if (piece === slot) {
       onPlace?.(slot);
       setPicked(null);
       return;
     }
     setShake(slot);
     window.setTimeout(() => setShake(null), 280);
+  }
+
+  function pickPiece(index: number) {
+    if (!mine) return;
+    setPicked((cur) => (cur === index ? null : index));
+  }
+
+  function startDrag(e: ReactPointerEvent<HTMLButtonElement>, index: number) {
+    if (!mine) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const pointerId = e.pointerId;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 8) return;
+      moved = true;
+      ev.preventDefault();
+      setPicked(index);
+      setDrag({ index, x: ev.clientX, y: ev.clientY, over: slotAt(ev.clientX, ev.clientY) });
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setDrag(null);
+      if (!moved) {
+        pickPiece(index);
+        return;
+      }
+      const slot = slotAt(ev.clientX, ev.clientY);
+      if (slot !== null) tryPlace(index, slot);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  function trayButton(i: number) {
+    return (
+      <button
+        key={i}
+        type="button"
+        onPointerDown={(e) => startDrag(e, i)}
+        className={`aspect-[3/4] touch-none overflow-visible rounded-md ${
+          picked === i || drag?.index === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
+        } ${drag?.index === i ? "opacity-25" : ""}`}
+      >
+        <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
+      </button>
+    );
   }
 
   return (
@@ -175,12 +242,18 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
         {Array.from({ length: PUZZLE_TOTAL }, (_, i) => (
           <button
             key={i}
+            ref={(el) => {
+              slotRefs.current[i] = el;
+            }}
             type="button"
             disabled={!mine || placed.includes(i)}
-            onClick={() => dropOnSlot(i)}
+            onClick={() => {
+              if (picked === null) return;
+              tryPlace(picked, i);
+            }}
             className={`relative z-0 h-full w-full touch-manipulation ${
               shake === i ? "z-10 animate-pulse bg-rose-100" : ""
-            } ${picked !== null && !placed.includes(i) ? "bg-white/40" : ""}`}
+            } ${drag?.over === i ? "bg-white" : picked !== null && !placed.includes(i) ? "bg-white/40" : ""}`}
           >
             {placed.includes(i) ? (
               <PieceArt index={i} image={image} className="absolute inset-[-22%] h-[144%] w-[144%] drop-shadow" />
@@ -197,37 +270,15 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
       </div>
 
       {mine ? (
-        <div className={`rounded-2xl border-2 px-1.5 py-1 ${t.tray}`}>
+        <div className={`select-none rounded-2xl border-2 px-1.5 py-1 ${t.tray}`}>
           <div className="grid grid-cols-6 gap-1">
-            {row1.map((i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => pickPiece(i)}
-                className={`aspect-[3/4] touch-manipulation overflow-visible rounded-md ${
-                  picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
-                }`}
-              >
-                <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
-              </button>
-            ))}
+            {row1.map(trayButton)}
             {Array.from({ length: Math.max(0, 6 - row1.length) }, (_, k) => (
               <div key={`e1-${k}`} className="aspect-[3/4]" />
             ))}
           </div>
           <div className="mt-1 grid grid-cols-6 gap-1">
-            {row2.map((i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => pickPiece(i)}
-                className={`aspect-[3/4] touch-manipulation overflow-visible rounded-md ${
-                  picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
-                }`}
-              >
-                <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
-              </button>
-            ))}
+            {row2.map(trayButton)}
             {Array.from({ length: Math.max(0, 6 - row2.length) }, (_, k) => (
               <div key={`e2-${k}`} className="aspect-[3/4]" />
             ))}
@@ -238,6 +289,15 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
           {placed.length}/{PUZZLE_TOTAL}
         </p>
       )}
+
+      {drag ? (
+        <div
+          className="pointer-events-none fixed z-[80] h-[72px] w-[56px] -translate-x-1/2 -translate-y-1/2 drop-shadow-2xl"
+          style={{ left: drag.x, top: drag.y }}
+        >
+          <PieceArt index={drag.index} image={image} className="h-full w-full" />
+        </div>
+      ) : null}
     </section>
   );
 }
