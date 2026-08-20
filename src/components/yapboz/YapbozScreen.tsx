@@ -6,35 +6,62 @@ import { PLAYERS, playerById, type PlayerId } from "@/data/players";
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "./LandscapeFrame";
-import { emptySlots, PuzzleBoard, puzzleComplete, type PuzzleSlots } from "./PuzzleBoard";
+import { emptySlots, PuzzleBoard, puzzleComplete, PUZZLE_TOTAL, type PuzzleSlots } from "./PuzzleBoard";
 
 type Props = {
   who: PlayerId;
   onBack: () => void;
 };
 
-type Presence = {
+type WireState = {
   who: PlayerId;
   session: string;
   ready: boolean;
-  slots: PuzzleSlots;
+  board: string;
   won: boolean;
 };
 
 const PEEK_MAX = 3;
 const CHANNEL = "yapboz-pair";
 
-function latest<T>(rows: T[] | undefined) {
+function pickPresence<T extends WireState>(rows: T[] | undefined) {
   if (!rows?.length) return undefined;
-  return rows[rows.length - 1];
+  let best = rows[rows.length - 1];
+  let bestN = -1;
+  for (const row of rows) {
+    const slots = unpackBoard(row.board);
+    const n = slots?.filter((p) => p !== null).length ?? -1;
+    if (n >= bestN) {
+      bestN = n;
+      best = row;
+    }
+  }
+  return best;
 }
 
-function readSlots(row: Presence): PuzzleSlots {
-  const raw = row.slots;
-  if (Array.isArray(raw) && raw.length === emptySlots().length) {
-    return raw.map((p) => (typeof p === "number" ? p : null));
+function packBoard(slots: PuzzleSlots) {
+  return Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
+    const v = slots[i];
+    return typeof v === "number" && v >= 0 ? v : -1;
+  }).join(",");
+}
+
+function unpackBoard(raw: unknown): PuzzleSlots | null {
+  let parts: unknown[] = [];
+  if (typeof raw === "string") {
+    parts = raw.split(",");
+  } else if (Array.isArray(raw)) {
+    parts = raw;
+  } else if (raw && typeof raw === "object") {
+    parts = Array.from({ length: PUZZLE_TOTAL }, (_, i) => (raw as Record<string, unknown>)[String(i)]);
+  } else {
+    return null;
   }
-  return emptySlots();
+  if (parts.length < PUZZLE_TOTAL) return null;
+  return Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
+    const v = Number(parts[i]);
+    return Number.isInteger(v) && v >= 0 ? v : null;
+  });
 }
 
 export function YapbozScreen({ who, onBack }: Props) {
@@ -78,38 +105,45 @@ export function YapbozScreen({ who, onBack }: Props) {
         if (cancelled) return;
 
         channel = supabase.channel(CHANNEL, {
-          config: { presence: { key: who } },
+          config: {
+            presence: { key: who },
+            broadcast: { ack: false, self: false },
+          },
         });
         channelRef.current = channel;
 
+        const applyPartner = (row: Partial<WireState>) => {
+          if (!row.who || row.who === who) return;
+          setTheyHere(true);
+          if (typeof row.ready === "boolean") {
+            theyReadyRef.current = row.ready;
+            if (row.ready && readyRef.current) setPlaying(true);
+          }
+          const nextSlots = unpackBoard(row.board);
+          if (nextSlots) setTheirSlots(nextSlots);
+          if (row.won && readyRef.current) {
+            winnerRef.current = row.who;
+            setWinner(row.who);
+          }
+        };
+
         const applyPresence = () => {
           if (!channel || !armedRef.current) return;
-          const state = channel.presenceState<Presence>();
+          const state = channel.presenceState<WireState>();
           let partnerHere = false;
-          let partnerReady = false;
-          let partnerSlots = emptySlots();
-          let win: PlayerId | null = null;
-
           for (const rows of Object.values(state)) {
-            const row = latest(rows);
+            const row = pickPresence(rows);
             if (!row || row.who === who) continue;
             partnerHere = true;
-            partnerReady = Boolean(row.ready);
-            partnerSlots = readSlots(row);
-            if (row.won) win = row.who;
+            applyPartner(row);
           }
-
-          theyReadyRef.current = partnerReady;
           setTheyHere(partnerHere);
-          setTheirSlots(partnerSlots);
-          if (win && readyRef.current) {
-            winnerRef.current = win;
-            setWinner(win);
-          }
-          if (partnerReady && readyRef.current) setPlaying(true);
         };
 
         channel.on("presence", { event: "sync" }, applyPresence);
+        channel.on("broadcast", { event: "yapboz" }, ({ payload }) => {
+          applyPartner(payload as WireState);
+        });
 
         channel.subscribe(async (status) => {
           if (status !== "SUBSCRIBED" || cancelled || !channel) return;
@@ -117,9 +151,9 @@ export function YapbozScreen({ who, onBack }: Props) {
             who,
             session,
             ready: false,
-            slots: emptySlots(),
+            board: packBoard(emptySlots()),
             won: false,
-          } satisfies Presence);
+          } satisfies WireState);
           if (cancelled) return;
           armedRef.current = true;
           setConnected(true);
@@ -140,22 +174,25 @@ export function YapbozScreen({ who, onBack }: Props) {
     };
   }, [who]);
 
-  async function track(next: Partial<Presence>) {
-    await channelRef.current?.track({
+  async function push(next: Partial<Pick<WireState, "ready" | "board" | "won">> = {}) {
+    const payload: WireState = {
       who,
       session: sessionRef.current,
-      ready,
-      slots: slotsRef.current,
-      won: false,
-      ...next,
-    } satisfies Presence);
+      ready: next.ready ?? readyRef.current,
+      board: next.board ?? packBoard(slotsRef.current),
+      won: next.won ?? false,
+    };
+    const ch = channelRef.current;
+    if (!ch) return;
+    await ch.track(payload);
+    await ch.send({ type: "broadcast", event: "yapboz", payload });
   }
 
   async function pressStart() {
     if (!theyHere || readyRef.current) return;
     readyRef.current = true;
     setReady(true);
-    await track({ ready: true });
+    await push({ ready: true });
     if (theyReadyRef.current) setPlaying(true);
   }
 
@@ -163,14 +200,14 @@ export function YapbozScreen({ who, onBack }: Props) {
     if (winnerRef.current) return;
     slotsRef.current = next;
     setMySlots(next);
-    void track({ ready: true, slots: next });
+    void push({ ready: true, board: packBoard(next) });
   }
 
   async function pressDone() {
     if (winnerRef.current || !puzzleComplete(slotsRef.current)) return;
     winnerRef.current = who;
     setWinner(who);
-    await track({ ready: true, won: true });
+    await push({ ready: true, won: true });
   }
 
   function peek() {
