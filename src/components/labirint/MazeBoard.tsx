@@ -148,7 +148,7 @@ export function MazeBoard({
                 x2={line.x2}
                 y2={line.y2}
                 stroke="#111827"
-                strokeWidth={0.08}
+                strokeWidth={0.055}
                 strokeLinecap="square"
               />
             ))}
@@ -175,7 +175,7 @@ export function MazeBoard({
           </div>
 
           <div
-            className="pointer-events-none absolute aspect-square h-[7%] overflow-hidden rounded-full opacity-80 ring-2 ring-white"
+            className="pointer-events-none absolute aspect-square h-[6%] overflow-hidden rounded-full opacity-80 ring-2 ring-white"
             style={{
               left: `${((goal.c + 0.5) / MAZE_COLS) * 100}%`,
               top: `${((goal.r + 0.5) / MAZE_ROWS) * 100}%`,
@@ -186,7 +186,7 @@ export function MazeBoard({
           </div>
 
           <div
-            className={`pointer-events-none absolute z-10 aspect-square h-[9%] overflow-hidden rounded-full bg-white shadow ring-2 ${t.token}`}
+            className={`pointer-events-none absolute z-10 aspect-square h-[8%] overflow-hidden rounded-full bg-white shadow ring-2 ${t.token}`}
             style={{
               left: `${((pos.c + 0.5) / MAZE_COLS) * 100}%`,
               top: `${((pos.r + 0.5) / MAZE_ROWS) * 100}%`,

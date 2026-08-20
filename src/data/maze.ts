@@ -2,8 +2,8 @@ export type Dir = "n" | "e" | "s" | "w";
 export type Pos = { r: number; c: number };
 export type CellWalls = Record<Dir, boolean>;
 
-export const MAZE_ROWS = 15;
-export const MAZE_COLS = 15;
+export const MAZE_ROWS = 19;
+export const MAZE_COLS = 19;
 
 const DIRS: { dir: Dir; dr: number; dc: number; opp: Dir }[] = [
   { dir: "n", dr: -1, dc: 0, opp: "s" },
@@ -32,7 +32,7 @@ function shuffle<T>(items: T[], rand: () => number) {
 }
 
 function buildMaze() {
-  const rand = mulberry32(20260820);
+  const rand = mulberry32(20260822);
   const cells: CellWalls[][] = Array.from({ length: MAZE_ROWS }, () =>
     Array.from({ length: MAZE_COLS }, () => ({ n: true, e: true, s: true, w: true })),
   );
