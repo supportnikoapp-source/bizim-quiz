@@ -123,7 +123,7 @@ export function MeetBoard({ myPos, theirPos, myTrail, theirTrail, who, onStep }:
               x2={line.x2}
               y2={line.y2}
               stroke="#111827"
-              strokeWidth={0.07}
+              strokeWidth={0.055}
               strokeLinecap="square"
             />
           ))}
@@ -171,7 +171,7 @@ function Token({
   return (
     <div
       className={`pointer-events-none absolute z-10 aspect-square overflow-hidden rounded-full bg-white shadow ring-2 ${ring} ${
-        mine ? "h-[14%]" : "h-[12%]"
+        mine ? "h-[9%]" : "h-[8%]"
       }`}
       style={{
         left: `${((pos.c + 0.5) / MEET_COLS) * 100}%`,

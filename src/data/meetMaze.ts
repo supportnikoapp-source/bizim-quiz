@@ -2,8 +2,8 @@ export type Dir = "n" | "e" | "s" | "w";
 export type Pos = { r: number; c: number };
 export type CellWalls = Record<Dir, boolean>;
 
-export const MEET_ROWS = 11;
-export const MEET_COLS = 23;
+export const MEET_ROWS = 15;
+export const MEET_COLS = 31;
 
 const DIRS: { dir: Dir; dr: number; dc: number; opp: Dir }[] = [
   { dir: "n", dr: -1, dc: 0, opp: "s" },
@@ -36,7 +36,7 @@ function inGrid(pos: Pos) {
 }
 
 function buildMeetMaze() {
-  const rand = mulberry32(20260821);
+  const rand = mulberry32(20260822);
   const cells: CellWalls[][] = Array.from({ length: MEET_ROWS }, () =>
     Array.from({ length: MEET_COLS }, () => ({ n: true, e: true, s: true, w: true })),
   );
@@ -63,19 +63,6 @@ function buildMeetMaze() {
     cells[next.r][next.c][step.opp] = false;
     seen[next.r][next.c] = true;
     stack.push(next);
-  }
-
-  for (let r = 0; r < MEET_ROWS; r++) {
-    for (let c = 0; c < MEET_COLS; c++) {
-      for (const d of DIRS) {
-        if (rand() > 0.14) continue;
-        if (!cells[r][c][d.dir]) continue;
-        const next = { r: r + d.dr, c: c + d.dc };
-        if (!inGrid(next)) continue;
-        cells[r][c][d.dir] = false;
-        cells[next.r][next.c][d.opp] = false;
-      }
-    }
   }
 
   cells[midR][0].w = false;

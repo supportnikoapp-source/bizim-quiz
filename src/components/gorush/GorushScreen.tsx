@@ -7,7 +7,6 @@ import {
   appendMeetTrail,
   MEET,
   meetInBounds,
-  meetSame,
   meetStep,
   packMeetTrail,
   theyMet,
@@ -35,6 +34,7 @@ type WireState = {
   c: number;
   trail: string;
   finished: boolean;
+  seq: number;
 };
 
 const CHANNEL = "gorush-pair";
@@ -74,6 +74,8 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
   const livePartnerRef = useRef(false);
   const beginPlayRef = useRef<() => void>(() => {});
   const winTimerRef = useRef<number | null>(null);
+  const seqRef = useRef(0);
+  const partnerSeqRef = useRef(-1);
   const onBothWonRef = useRef(onBothWon);
   onBothWonRef.current = onBothWon;
 
@@ -122,18 +124,23 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
       }
       const nextPos =
         typeof row.r === "number" && typeof row.c === "number" ? { r: row.r, c: row.c } : null;
-      const posOk = nextPos && meetInBounds(nextPos);
-      const leftover = stale && posOk && !meetSame(nextPos, theirStart) && !livePartnerRef.current;
-      if (posOk && !leftover) {
+      const posOk = Boolean(nextPos && meetInBounds(nextPos));
+      const seq =
+        typeof row.seq === "number"
+          ? row.seq
+          : unpackMeetTrail(typeof row.trail === "string" ? row.trail : "").length;
+      const older = seq < partnerSeqRef.current || (stale && seq <= partnerSeqRef.current);
+      if (posOk && nextPos && !older) {
+        partnerSeqRef.current = seq;
         theirPosRef.current = nextPos;
         setTheirPos(nextPos);
         if (playingRef.current && theyMet(posRef.current, nextPos)) celebrate();
       }
-      if (typeof row.trail === "string" && !leftover) {
+      if (typeof row.trail === "string" && !older) {
         const next = unpackMeetTrail(row.trail);
         if (next.length) setTheirTrail(next);
       }
-      if (row.finished && (!stale || livePartnerRef.current)) {
+      if (row.finished && (!stale || livePartnerRef.current) && !older) {
         celebrate();
       }
     }
@@ -193,6 +200,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
             c: myStart.c,
             trail: packMeetTrail([myStart]),
             finished: false,
+            seq: 0,
           };
           await channel.track(payload);
           await supabase.from("gorush_state").upsert({
@@ -232,6 +240,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
   }, [who, partnerWho, myStart.c, myStart.r, theirStart]);
 
   async function push(next: Partial<Pick<WireState, "ready" | "r" | "c" | "trail" | "finished">> = {}) {
+    seqRef.current += 1;
     const payload: WireState = {
       who,
       session: sessionRef.current,
@@ -240,6 +249,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
       c: next.c ?? posRef.current.c,
       trail: next.trail ?? packMeetTrail(trailRef.current),
       finished: next.finished ?? wonRef.current,
+      seq: seqRef.current,
     };
     const ch = channelRef.current;
     if (ch) {
@@ -262,12 +272,11 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
     playingRef.current = true;
     const me = startOf(who);
     posRef.current = me;
-    theirPosRef.current = theirStart;
     trailRef.current = [me];
+    seqRef.current = 0;
+    partnerSeqRef.current = -1;
     setMyPos(me);
     setMyTrail([me]);
-    setTheirPos(theirStart);
-    setTheirTrail([theirStart]);
     wonRef.current = false;
     setWon(false);
     setReady(true);
