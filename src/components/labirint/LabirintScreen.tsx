@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYERS, type PlayerId } from "@/data/players";
 import {
   appendTrail,
+  inBounds,
   MAZE,
   packTrail,
   samePos,
@@ -73,6 +74,9 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
   const armedRef = useRef(false);
   const holdRef = useRef<number | null>(null);
   const moveRef = useRef<(dir: Dir) => void>(() => {});
+  const playingRef = useRef(false);
+  const livePartnerRef = useRef(false);
+  const beginPlayRef = useRef<() => void>(() => {});
 
   posRef.current = myPos;
   trailRef.current = myTrail;
@@ -93,22 +97,27 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
     let channel: RealtimeChannel | null = null;
     let poll: number | null = null;
 
-    function applyPartner(row: Partial<WireState>, fromKey?: string) {
+    function applyPartner(row: Partial<WireState>, fromKey?: string, stale = false) {
       const id = (row.who || fromKey) as PlayerId | undefined;
       if (!id || id === who) return;
+      if (!stale) livePartnerRef.current = true;
       setTheyHere(true);
-      if (typeof row.ready === "boolean") {
+      if (typeof row.ready === "boolean" && (!stale || livePartnerRef.current)) {
         theyReadyRef.current = row.ready;
-        if (row.ready && readyRef.current) setPlaying(true);
+        if (row.ready && readyRef.current) beginPlayRef.current();
       }
-      if (typeof row.r === "number" && typeof row.c === "number") {
-        setTheirPos({ r: row.r, c: row.c });
+      const nextPos =
+        typeof row.r === "number" && typeof row.c === "number" ? { r: row.r, c: row.c } : null;
+      const posOk = nextPos && inBounds(nextPos);
+      const leftover = stale && posOk && !samePos(nextPos, theirStart) && !livePartnerRef.current;
+      if (posOk && !leftover) {
+        setTheirPos(nextPos);
       }
-      if (typeof row.trail === "string") {
+      if (typeof row.trail === "string" && !leftover) {
         const next = unpackTrail(row.trail);
         if (next.length) setTheirTrail(next);
       }
-      if (row.finished) {
+      if (row.finished && (!stale || livePartnerRef.current)) {
         theyFinishedRef.current = true;
         if (!iFinishedRef.current && !winnerRef.current) {
           winnerRef.current = partnerWho;
@@ -124,7 +133,7 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
         .eq("who", partnerWho)
         .maybeSingle();
       if (error || !data) return;
-      applyPartner(data as WireState);
+      applyPartner(data as WireState, undefined, true);
     }
 
     async function connect() {
@@ -238,16 +247,43 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
     });
   }
 
+  function beginPlay() {
+    if (playingRef.current) return;
+    playingRef.current = true;
+    const me = startOf(who);
+    posRef.current = me;
+    trailRef.current = [me];
+    setMyPos(me);
+    setMyTrail([me]);
+    setTheirPos(theirStart);
+    setTheirTrail([theirStart]);
+    iFinishedRef.current = false;
+    theyFinishedRef.current = false;
+    winnerRef.current = null;
+    setWinner(null);
+    setReady(true);
+    readyRef.current = true;
+    setPlaying(true);
+    void push({
+      ready: true,
+      r: me.r,
+      c: me.c,
+      trail: packTrail([me]),
+      finished: false,
+    });
+  }
+  beginPlayRef.current = beginPlay;
+
   async function pressStart() {
     if (!theyHere || readyRef.current) return;
     readyRef.current = true;
     setReady(true);
     await push({ ready: true });
-    if (theyReadyRef.current) setPlaying(true);
+    if (theyReadyRef.current) beginPlay();
   }
 
   function move(dir: Dir) {
-    if (!playing || winnerRef.current || iFinishedRef.current) return;
+    if (!playingRef.current || winnerRef.current || iFinishedRef.current) return;
     const next = stepPos(posRef.current, dir);
     if (!next) return;
     const trail = appendTrail(trailRef.current, next);
@@ -330,12 +366,7 @@ export function LabirintScreen({ who, onBack, onSkipLobby }: Props) {
           {onSkipLobby && !playing ? (
             <button
               type="button"
-              onClick={() => {
-                readyRef.current = true;
-                setReady(true);
-                setPlaying(true);
-                void push({ ready: true });
-              }}
+              onClick={() => beginPlay()}
               className="rounded-xl bg-white px-2 py-1 text-[11px] font-semibold text-[#6b7280] shadow"
             >
               Keç →
