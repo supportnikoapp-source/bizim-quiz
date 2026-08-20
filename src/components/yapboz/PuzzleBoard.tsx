@@ -56,17 +56,17 @@ function PieceArt({
   const col = index % PUZZLE_COLS;
   const row = Math.floor(index / PUZZLE_COLS);
   return (
-    <div className={`pointer-events-none relative overflow-hidden ${className ?? ""}`} aria-hidden>
+    <div className={`pointer-events-none overflow-hidden ${className ?? ""}`} aria-hidden>
       <img
         src={image}
         alt=""
         draggable={false}
-        className="absolute max-w-none object-cover object-center"
+        className="block max-w-none object-cover object-center"
         style={{
           width: `${PUZZLE_COLS * 100}%`,
-          height: `${PUZZLE_ROWS * 100}%`,
-          left: `${-col * 100}%`,
-          top: `${-row * 100}%`,
+          height: "auto",
+          aspectRatio: `${PUZZLE_COLS} / ${PUZZLE_ROWS}`,
+          transform: `translate(${(-col / PUZZLE_COLS) * 100}%, ${(-row / PUZZLE_ROWS) * 100}%)`,
         }}
       />
     </div>
@@ -284,12 +284,12 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }
                   if (!mine || locked) return;
                   if (picked !== null) dropOn(picked, i);
                 }}
-                className={`relative aspect-square overflow-hidden ${mine ? "touch-none" : ""} ${
+                className={`relative h-full min-h-0 w-full overflow-hidden ${mine ? "touch-none" : ""} ${
                   drag?.over === i ? "ring-2 ring-white" : picked !== null && !locked ? "bg-white/50" : "bg-white/30"
                 }`}
               >
                 {shown !== null ? (
-                  <PieceArt index={shown} image={image} className="absolute inset-0" />
+                  <PieceArt index={shown} image={image} className="h-full w-full" />
                 ) : (
                   <span className="absolute inset-[12%] rounded-sm border border-dashed border-black/20" />
                 )}
