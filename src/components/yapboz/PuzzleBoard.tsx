@@ -232,7 +232,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 px-0.5">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 px-1.5">
       <div className="flex items-center gap-2">
         <div className={`h-8 w-8 overflow-hidden rounded-full ring-2 ${t.ring}`}>
           <PlayerPhoto src={avatar} alt={name} size={32} className="h-full w-full object-cover" />
@@ -243,7 +243,7 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, slots, onSlots }
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <div
           ref={boardRef}
-          className={`grid h-full w-full min-h-0 grid-cols-3 grid-rows-4 gap-[2px] overflow-hidden rounded-xl border-4 ${t.board}`}
+          className={`grid aspect-[3/4] h-full max-h-full w-auto max-w-full grid-cols-3 grid-rows-4 gap-[2px] overflow-hidden rounded-xl border-4 ${t.board}`}
         >
           {Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
             const sittingPiece = slots[i];

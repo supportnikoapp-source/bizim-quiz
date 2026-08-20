@@ -231,7 +231,7 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
 
   return (
     <LandscapeFrame>
-      <div className="relative flex h-full w-full flex-col px-2 py-1">
+      <div className="relative flex h-full w-full flex-col px-3 py-2">
         <header className="mb-1 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -265,22 +265,22 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
 
         {!playing ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex min-h-0 flex-1 items-center justify-center gap-6">
               {PLAYERS.map((p) => (
-                <figure key={p.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <figure key={p.id} className="flex h-[90%] min-h-0 flex-col items-center">
                   <div
-                    className={`min-h-0 flex-1 overflow-hidden rounded-2xl border-4 ${
+                    className={`h-full overflow-hidden rounded-2xl border-4 ${
                       p.id === "ilkin" ? "border-[#93c5fd]" : "border-[#f9a8d4]"
                     }`}
                   >
                     <img
                       src={p.id === "ilkin" ? "/puzzles/ilkin.png" : "/puzzles/fidan.png"}
                       alt={p.name}
-                      className="h-full w-full object-cover object-[center_20%]"
+                      className="h-full w-auto object-contain"
                     />
                   </div>
                   <figcaption
-                    className={`mt-1 text-center text-sm font-bold ${
+                    className={`mt-1 shrink-0 text-center text-sm font-bold ${
                       p.id === "ilkin" ? "text-[#2563eb]" : "text-[#db2777]"
                     }`}
                   >
