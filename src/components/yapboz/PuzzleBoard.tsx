@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState, type PointerEvent } from "react";
+import { useId, useRef, useState } from "react";
 import { PlayerPhoto } from "@/components/ui/PlayerPhoto";
 
 export const PUZZLE_COLS = 4;
 export const PUZZLE_ROWS = 3;
 export const PUZZLE_TOTAL = PUZZLE_COLS * PUZZLE_ROWS;
+
+type Tab = -1 | 0 | 1;
 
 type Props = {
   image: string;
@@ -23,19 +25,119 @@ const THEMES = {
     name: "text-[#2563eb]",
     board: "border-[#93c5fd] bg-[#eff6ff]",
     tray: "border-[#bfdbfe] bg-[#dbeafe]/70",
+    pick: "ring-[#2563eb]",
   },
   pink: {
     ring: "ring-[#f472b6]",
     name: "text-[#db2777]",
     board: "border-[#f9a8d4] bg-[#fdf2f8]",
     tray: "border-[#fbcfe8] bg-[#fce7f3]/80",
+    pick: "ring-[#db2777]",
   },
 };
 
+function hEdge(row: number, col: number): Tab {
+  return ((row * 5 + col * 3) % 2 === 0 ? 1 : -1) as Tab;
+}
+
+function vEdge(row: number, col: number): Tab {
+  return ((row * 7 + col * 2) % 2 === 0 ? 1 : -1) as Tab;
+}
+
+export function edgesFor(index: number) {
+  const col = index % PUZZLE_COLS;
+  const row = Math.floor(index / PUZZLE_COLS);
+  return {
+    left: (col === 0 ? 0 : -hEdge(row, col - 1)) as Tab,
+    right: (col === PUZZLE_COLS - 1 ? 0 : hEdge(row, col)) as Tab,
+    top: (row === 0 ? 0 : -vEdge(row - 1, col)) as Tab,
+    bottom: (row === PUZZLE_ROWS - 1 ? 0 : vEdge(row, col)) as Tab,
+  };
+}
+
+function edge(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  tab: Tab,
+  nx: number,
+  ny: number,
+) {
+  if (tab === 0) return `L ${x2} ${y2}`;
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const tx = dx / len;
+  const ty = dy / len;
+  const n = 11;
+  const h = 17 * tab;
+  const ax = mx - tx * n;
+  const ay = my - ty * n;
+  const bx = mx + tx * n;
+  const by = my + ty * n;
+  const cx = mx + nx * h;
+  const cy = my + ny * h;
+  return [
+    `L ${ax} ${ay}`,
+    `C ${ax + nx * h * 0.45} ${ay + ny * h * 0.45} ${cx - tx * n * 0.9} ${cy - ty * n * 0.9} ${cx} ${cy}`,
+    `C ${cx + tx * n * 0.9} ${cy + ty * n * 0.9} ${bx + nx * h * 0.45} ${by + ny * h * 0.45} ${bx} ${by}`,
+    `L ${x2} ${y2}`,
+  ].join(" ");
+}
+
+export function piecePath(index: number) {
+  const { left, right, top, bottom } = edgesFor(index);
+  return [
+    "M 0 0",
+    edge(0, 0, 100, 0, top, 0, -1),
+    edge(100, 0, 100, 100, right, 1, 0),
+    edge(100, 100, 0, 100, bottom, 0, 1),
+    edge(0, 100, 0, 0, left, -1, 0),
+    "Z",
+  ].join(" ");
+}
+
+function PieceArt({
+  index,
+  image,
+  className,
+}: {
+  index: number;
+  image: string;
+  className?: string;
+}) {
+  const uid = useId().replace(/:/g, "");
+  const clip = `p${uid}-${index}`;
+  const col = index % PUZZLE_COLS;
+  const row = Math.floor(index / PUZZLE_COLS);
+  return (
+    <svg viewBox="-22 -22 144 144" className={className} aria-hidden>
+      <defs>
+        <clipPath id={clip}>
+          <path d={piecePath(index)} />
+        </clipPath>
+      </defs>
+      <image
+        href={image}
+        x={-col * 100}
+        y={-row * 100}
+        width={PUZZLE_COLS * 100}
+        height={PUZZLE_ROWS * 100}
+        preserveAspectRatio="xMidYMid slice"
+        clipPath={`url(#${clip})`}
+      />
+      <path d={piecePath(index)} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2.2" />
+    </svg>
+  );
+}
+
 export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace }: Props) {
   const t = THEMES[theme];
-  const boardRef = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [shake, setShake] = useState<number | null>(null);
   const shuffleRef = useRef<number[] | null>(null);
   if (!shuffleRef.current) {
     shuffleRef.current = Array.from({ length: PUZZLE_TOTAL }, (_, i) => i).sort(() => Math.random() - 0.5);
@@ -44,40 +146,20 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
   const row1 = tray.slice(0, Math.ceil(tray.length / 2));
   const row2 = tray.slice(Math.ceil(tray.length / 2));
 
-  function pos(index: number) {
-    const col = index % PUZZLE_COLS;
-    const row = Math.floor(index / PUZZLE_COLS);
-    return {
-      backgroundImage: `url(${image})`,
-      backgroundSize: `${PUZZLE_COLS * 100}% ${PUZZLE_ROWS * 100}%`,
-      backgroundPosition: `${(col / (PUZZLE_COLS - 1)) * 100}% ${(row / (PUZZLE_ROWS - 1)) * 100}%`,
-    };
-  }
-
-  function onPointerDown(index: number, e: PointerEvent) {
+  function pickPiece(index: number) {
     if (!mine) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    setDrag({ index, x: e.clientX, y: e.clientY });
+    setPicked((cur) => (cur === index ? null : index));
   }
 
-  function onPointerMove(e: PointerEvent) {
-    if (!drag) return;
-    setDrag({ ...drag, x: e.clientX, y: e.clientY });
-  }
-
-  function onPointerUp(e: PointerEvent) {
-    if (!drag || !boardRef.current) {
-      setDrag(null);
+  function dropOnSlot(slot: number) {
+    if (!mine || picked === null || placed.includes(slot)) return;
+    if (picked === slot) {
+      onPlace?.(slot);
+      setPicked(null);
       return;
     }
-    const rect = boardRef.current.getBoundingClientRect();
-    const col = Math.floor(((e.clientX - rect.left) / rect.width) * PUZZLE_COLS);
-    const row = Math.floor(((e.clientY - rect.top) / rect.height) * PUZZLE_ROWS);
-    const slot = row * PUZZLE_COLS + col;
-    if (row >= 0 && row < PUZZLE_ROWS && col >= 0 && col < PUZZLE_COLS && slot === drag.index) {
-      onPlace?.(drag.index);
-    }
-    setDrag(null);
+    setShake(slot);
+    window.setTimeout(() => setShake(null), 280);
   }
 
   return (
@@ -89,16 +171,23 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
         <p className={`text-[15px] font-bold ${t.name}`}>{name}</p>
       </div>
 
-      <div
-        ref={boardRef}
-        className={`relative grid min-h-0 flex-1 grid-cols-4 grid-rows-3 overflow-hidden rounded-2xl border-4 ${t.board}`}
-      >
+      <div className={`relative grid min-h-0 flex-1 grid-cols-4 grid-rows-3 overflow-visible rounded-2xl border-4 ${t.board}`}>
         {Array.from({ length: PUZZLE_TOTAL }, (_, i) => (
-          <div
+          <button
             key={i}
-            className="border border-white/70"
-            style={placed.includes(i) ? pos(i) : { background: "rgba(255,255,255,0.85)" }}
-          />
+            type="button"
+            disabled={!mine || placed.includes(i)}
+            onClick={() => dropOnSlot(i)}
+            className={`relative min-h-0 ${shake === i ? "animate-pulse bg-rose-100" : ""}`}
+          >
+            {placed.includes(i) ? (
+              <PieceArt index={i} image={image} className="absolute inset-[-22%] h-[144%] w-[144%] drop-shadow" />
+            ) : (
+              <svg viewBox="-22 -22 144 144" className="absolute inset-[-22%] h-[144%] w-[144%] opacity-35">
+                <path d={piecePath(i)} fill="white" stroke="#9ca3af" strokeWidth="2" strokeDasharray="5 4" />
+              </svg>
+            )}
+          </button>
         ))}
       </div>
 
@@ -109,12 +198,13 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
               <button
                 key={i}
                 type="button"
-                className="aspect-[3/4] overflow-hidden rounded-md border border-white shadow-sm"
-                style={pos(i)}
-                onPointerDown={(e) => onPointerDown(i, e)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-              />
+                onClick={() => pickPiece(i)}
+                className={`aspect-[3/4] overflow-visible rounded-md ${
+                  picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
+                }`}
+              >
+                <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
+              </button>
             ))}
             {Array.from({ length: Math.max(0, 6 - row1.length) }, (_, k) => (
               <div key={`e1-${k}`} className="aspect-[3/4]" />
@@ -125,12 +215,13 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
               <button
                 key={i}
                 type="button"
-                className="aspect-[3/4] overflow-hidden rounded-md border border-white shadow-sm"
-                style={pos(i)}
-                onPointerDown={(e) => onPointerDown(i, e)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-              />
+                onClick={() => pickPiece(i)}
+                className={`aspect-[3/4] overflow-visible rounded-md ${
+                  picked === i ? `ring-2 ring-offset-1 ${t.pick} bg-white` : ""
+                }`}
+              >
+                <PieceArt index={i} image={image} className="h-full w-full drop-shadow-sm" />
+              </button>
             ))}
             {Array.from({ length: Math.max(0, 6 - row2.length) }, (_, k) => (
               <div key={`e2-${k}`} className="aspect-[3/4]" />
@@ -142,17 +233,6 @@ export function PuzzleBoard({ image, name, avatar, theme, mine, placed, onPlace 
           {placed.length}/{PUZZLE_TOTAL}
         </p>
       )}
-
-      {drag ? (
-        <div
-          className="pointer-events-none fixed z-50 aspect-[3/4] w-16 rounded-md border-2 border-white shadow-lg"
-          style={{
-            left: drag.x - 32,
-            top: drag.y - 40,
-            ...pos(drag.index),
-          }}
-        />
-      ) : null}
     </section>
   );
 }

@@ -163,7 +163,7 @@ export function YapbozScreen({ who, onBack }: Props) {
   }
 
   const waitingPartner = Boolean(room && !room.guest_id);
-  const myImage = who === "ilkin" ? "/puzzles/ilkin.png" : "/puzzles/fidan.png";
+  const myPuzzleImage = who === "ilkin" ? "/puzzles/fidan.png" : "/puzzles/ilkin.png";
 
   return (
     <LandscapeFrame>
@@ -220,7 +220,8 @@ export function YapbozScreen({ who, onBack }: Props) {
               ))}
             </div>
             <p className="text-center text-[13px] text-[#4b5563]">
-              Şəklə bax. Sonra hər ikiniz Başla basanda oyun eyni vaxtda açılır.
+              {who === "ilkin" ? "Sən Fidanın şəklini yığacaqsan." : "Sən İlkinin şəklini yığacaqsan."} Şəklə bax,
+              sonra hər ikiniz Başla basanda oyun eyni vaxtda açılır.
             </p>
             {waitingPartner ? (
               <p className="text-sm text-[#6b7280]">
@@ -240,7 +241,7 @@ export function YapbozScreen({ who, onBack }: Props) {
         ) : (
           <div className="flex min-h-0 flex-1 gap-2">
             <PuzzleBoard
-              image="/puzzles/ilkin.png"
+              image="/puzzles/fidan.png"
               name="İlkin"
               avatar={PLAYERS[0].image}
               theme="blue"
@@ -249,7 +250,7 @@ export function YapbozScreen({ who, onBack }: Props) {
               onPlace={who === "ilkin" ? placePiece : undefined}
             />
             <PuzzleBoard
-              image="/puzzles/fidan.png"
+              image="/puzzles/ilkin.png"
               name="Fidan"
               avatar={PLAYERS[1].image}
               theme="pink"
@@ -266,7 +267,7 @@ export function YapbozScreen({ who, onBack }: Props) {
             className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 p-6"
             onClick={() => setShowPeek(false)}
           >
-            <img src={myImage} alt="Orijinal" className="max-h-[82%] max-w-[55%] rounded-2xl object-contain" />
+            <img src={myPuzzleImage} alt="Orijinal" className="max-h-[82%] max-w-[55%] rounded-2xl object-contain" />
           </button>
         ) : null}
 
