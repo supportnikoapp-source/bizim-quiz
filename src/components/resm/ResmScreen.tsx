@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYERS, type PlayerId } from "@/data/players";
 import {
+  DRAW_MS,
+  formatDrawClock,
   packStrokes,
   PEN_SIZES,
   RESM_COLORS,
@@ -34,6 +36,7 @@ type WireState = {
   strokes: string;
   finished: boolean;
   vote: string;
+  advance: boolean;
   seq: number;
 };
 
@@ -54,6 +57,8 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   const [myVote, setMyVote] = useState("");
   const [theirVote, setTheirVote] = useState("");
   const [wins, setWins] = useState({ ilkin: 0, fidan: 0 });
+  const [leftMs, setLeftMs] = useState(DRAW_MS);
+  const [myAdvance, setMyAdvance] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const strokesRef = useRef<Stroke[]>([]);
@@ -65,13 +70,19 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   const phaseRef = useRef<Phase>("lobby");
   const voteRef = useRef("");
   const theyVoteRef = useRef("");
+  const myAdvanceRef = useRef(false);
+  const theyAdvanceRef = useRef(false);
   const sessionRef = useRef(crypto.randomUUID());
   const armedRef = useRef(false);
   const seqRef = useRef(0);
   const partnerSeqRef = useRef(-1);
   const livePartnerRef = useRef(false);
+  const timerRef = useRef<number | null>(null);
+  const endAtRef = useRef(0);
   const beginPlayRef = useRef<() => void>(() => {});
   const goCompareRef = useRef<() => void>(() => {});
+  const finishRoundRef = useRef<() => void>(() => {});
+  const goNextRef = useRef<() => void>(() => {});
   const onBothDoneRef = useRef(onBothDone);
   onBothDoneRef.current = onBothDone;
 
@@ -80,6 +91,32 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   roundRef.current = round;
   phaseRef.current = phase;
   voteRef.current = myVote;
+  myAdvanceRef.current = myAdvance;
+
+  function clearTimer() {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function startTimer() {
+    clearTimer();
+    endAtRef.current = Date.now() + DRAW_MS;
+    setLeftMs(DRAW_MS);
+    timerRef.current = window.setInterval(() => {
+      const left = Math.max(0, endAtRef.current - Date.now());
+      setLeftMs(left);
+      if (left <= 0) {
+        clearTimer();
+        finishRoundRef.current();
+      }
+    }, 200);
+  }
+
+  useEffect(() => {
+    return () => clearTimer();
+  }, []);
 
   useEffect(() => {
     if (!hasSupabaseConfig()) {
@@ -120,6 +157,12 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
         theyVoteRef.current = row.vote;
         setTheirVote(row.vote);
       }
+      if (typeof row.advance === "boolean") {
+        theyAdvanceRef.current = row.advance;
+        if (row.advance && myAdvanceRef.current && phaseRef.current === "result") {
+          goNextRef.current();
+        }
+      }
       if (
         theyFinishedRef.current &&
         finishedRef.current &&
@@ -132,7 +175,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
     async function pullPartner() {
       const { data, error } = await supabase
         .from("resm_state")
-        .select("who, round, strokes, ready, finished, vote, seq")
+        .select("who, round, strokes, ready, finished, vote, seq, advance")
         .eq("who", partnerWho)
         .maybeSingle();
       if (error || !data) return;
@@ -180,6 +223,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
             strokes: "",
             finished: false,
             vote: "",
+            advance: false,
             seq: 0,
           };
           await channel.track(payload);
@@ -190,6 +234,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
             ready: false,
             finished: false,
             vote: "",
+            advance: false,
             seq: 0,
             updated_at: new Date().toISOString(),
           });
@@ -225,6 +270,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
       strokes: next.strokes ?? packStrokes(strokesRef.current),
       finished: next.finished ?? finishedRef.current,
       vote: next.vote ?? voteRef.current,
+      advance: next.advance ?? myAdvanceRef.current,
       seq: seqRef.current,
     };
     const ch = channelRef.current;
@@ -239,6 +285,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
       ready: payload.ready,
       finished: payload.finished,
       vote: payload.vote,
+      advance: payload.advance,
       seq: payload.seq,
       updated_at: new Date().toISOString(),
     });
@@ -256,31 +303,59 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
     theyFinishedRef.current = false;
     voteRef.current = "";
     theyVoteRef.current = "";
+    myAdvanceRef.current = false;
+    theyAdvanceRef.current = false;
     strokesRef.current = [];
     setRound(index);
     setStrokes([]);
     setTheirStrokes([]);
     setMyVote("");
     setTheirVote("");
+    setMyAdvance(false);
     setReady(true);
     readyRef.current = true;
     phaseRef.current = "draw";
     setPhase("draw");
+    startTimer();
     push({
       ready: true,
       round: index + 1,
       strokes: "",
       finished: false,
       vote: "",
+      advance: false,
     });
   }
 
   function goCompare() {
     if (phaseRef.current === "compare" || phaseRef.current === "result") return;
+    clearTimer();
     phaseRef.current = "compare";
     setPhase("compare");
   }
   goCompareRef.current = goCompare;
+
+  function finishRound() {
+    if (finishedRef.current || phaseRef.current !== "draw") return;
+    finishedRef.current = true;
+    clearTimer();
+    setLeftMs(0);
+    phaseRef.current = "wait";
+    setPhase("wait");
+    push({ ready: true, finished: true, advance: false, strokes: packStrokes(strokesRef.current) });
+    if (theyFinishedRef.current) goCompare();
+  }
+  finishRoundRef.current = finishRound;
+
+  function goNext() {
+    if (phaseRef.current !== "result") return;
+    if (roundRef.current >= RESM_PROMPTS.length - 1) {
+      onBothDoneRef.current();
+      return;
+    }
+    startRound(roundRef.current + 1);
+  }
+  goNextRef.current = goNext;
 
   async function pressStart() {
     if (!theyHere || readyRef.current) return;
@@ -290,20 +365,25 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
     if (theyReadyRef.current) beginPlay();
   }
 
-  function pressDone() {
-    if (finishedRef.current || phaseRef.current !== "draw") return;
-    finishedRef.current = true;
-    phaseRef.current = "wait";
-    setPhase("wait");
-    push({ ready: true, finished: true, strokes: packStrokes(strokesRef.current) });
-    if (theyFinishedRef.current) goCompare();
-  }
-
   function voteFor(id: PlayerId) {
     if (phaseRef.current !== "compare" || voteRef.current) return;
     voteRef.current = id;
     setMyVote(id);
     push({ ready: true, finished: true, vote: id, strokes: packStrokes(strokesRef.current) });
+  }
+
+  function pressAdvance() {
+    if (phaseRef.current !== "result" || myAdvanceRef.current) return;
+    myAdvanceRef.current = true;
+    setMyAdvance(true);
+    push({
+      ready: true,
+      finished: true,
+      advance: true,
+      vote: voteRef.current,
+      strokes: packStrokes(strokesRef.current),
+    });
+    if (theyAdvanceRef.current) goNext();
   }
 
   useEffect(() => {
@@ -327,6 +407,8 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   const roundWinner =
     myVote && theirVote && myVote === theirVote ? (myVote as PlayerId) : null;
   const lastRound = round >= RESM_PROMPTS.length - 1;
+  const clock = formatDrawClock(leftMs);
+  const clockUrgent = leftMs <= 30_000;
 
   return (
     <LandscapeFrame hint="Rəsm üfüqi ekranda tam görünür">
@@ -350,7 +432,15 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
                 : "Eyni şeyi çəkirik, ən yaxşısı qazanır 💜"}
             </p>
           </div>
-          {onSkipLobby && phase === "lobby" ? (
+          {phase === "draw" || phase === "wait" ? (
+            <p
+              className={`min-w-[52px] text-right text-[18px] font-black tabular-nums ${
+                clockUrgent ? "text-[#dc2626]" : "text-[#1e3a5f]"
+              }`}
+            >
+              {clock}
+            </p>
+          ) : onSkipLobby && phase === "lobby" ? (
             <button
               type="button"
               onClick={() => beginPlay()}
@@ -388,8 +478,8 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
               ))}
             </div>
             <p className="shrink-0 px-4 py-1 text-center text-[12px] text-[#4b5563]">
-              İki şəkil çəkəcəksiniz: <b>Gün batımı</b> və <b>Dağ-meşə</b>. Tam ekranda çəkin, Bitdi
-              basanda hər iki rəsm görünür, ən yaxşısını seçirsiniz.
+              İki şəkil: <b>Gün batımı</b> və <b>Dağ-meşə</b>. Hər birində <b>3 dəqiqə</b> var.
+              Vaxt bitəndə hər iki rəsm görünür, ən yaxşısını seçirsiniz.
             </p>
             {waitingPartner ? (
               <p className="shrink-0 pb-1 text-center text-sm text-[#6b7280]">
@@ -413,6 +503,11 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
             <p className="shrink-0 pb-1 text-center text-[15px] font-bold text-[#1e3a5f]">
               {prompt.title}
               <span className="ml-2 text-[12px] font-medium text-[#6b7280]">{prompt.hint}</span>
+              {phase === "wait" ? (
+                <span className="ml-2 text-[12px] font-semibold text-[#6b7280]">
+                  {partnerName} gözlənilir…
+                </span>
+              ) : null}
             </p>
             <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-[#d6d3d1] bg-[#fffaf4]">
               <DrawCanvas
@@ -429,10 +524,11 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
                   <button
                     key={c}
                     type="button"
+                    disabled={phase === "wait"}
                     onClick={() => setColor(c)}
                     className={`h-7 w-7 rounded-full border ${
                       color === c ? "ring-2 ring-[#1e3a5f] ring-offset-1" : "border-black/20"
-                    }`}
+                    } disabled:opacity-40`}
                     style={{ background: c }}
                     aria-label={c}
                   />
@@ -443,10 +539,11 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
                   <button
                     key={p.id}
                     type="button"
+                    disabled={phase === "wait"}
                     onClick={() => setPen(p.width)}
                     className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${
                       pen === p.width ? "bg-[#1e3a5f] text-white" : "bg-white text-[#1e3a5f] shadow"
-                    }`}
+                    } disabled:opacity-40`}
                   >
                     {p.label}
                   </button>
@@ -460,25 +557,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
               >
                 Geri al
               </button>
-              {phase === "draw" ? (
-                <button
-                  type="button"
-                  onClick={pressDone}
-                  className="rounded-full bg-[#16a34a] px-5 py-2 text-[14px] font-black text-white"
-                >
-                  Bitdi
-                </button>
-              ) : (
-                <p className="text-[12px] font-semibold text-[#6b7280]">{partnerName} gözlənilir…</p>
-              )}
             </div>
-          </div>
-        ) : null}
-
-        {phase === "wait" ? (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#1b2448]/70 px-6 text-center">
-            <p className="font-serif text-4xl text-white">İlk bitirdiniz</p>
-            <p className="mt-3 text-[16px] text-white/85">{partnerName} çəkməsi gözlənilir…</p>
           </div>
         ) : null}
 
@@ -525,13 +604,15 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
             {phase === "result" ? (
               <button
                 type="button"
-                onClick={() => {
-                  if (lastRound) onBothDone();
-                  else startRound(round + 1);
-                }}
-                className="mx-auto mt-2 mb-1 min-h-[42px] rounded-full bg-[#3b82f6] px-10 text-[15px] font-semibold text-white"
+                disabled={myAdvance}
+                onClick={pressAdvance}
+                className="mx-auto mt-2 mb-1 min-h-[42px] rounded-full bg-[#3b82f6] px-10 text-[15px] font-semibold text-white disabled:opacity-60"
               >
-                {lastRound ? "Davam" : "Növbəti şəkil"}
+                {myAdvance
+                  ? `${partnerName} Davam basmasını gözləyirik…`
+                  : lastRound
+                    ? "Davam"
+                    : "Növbəti şəkil"}
               </button>
             ) : null}
           </div>

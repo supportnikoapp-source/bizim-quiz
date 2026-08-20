@@ -30,6 +30,15 @@ export const PEN_SIZES = [
   { id: "l", width: 18, label: "Qalın" },
 ];
 
+export const DRAW_MS = 180_000;
+
+export function formatDrawClock(ms: number) {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
 export function packStrokes(strokes: Stroke[]) {
   return JSON.stringify(
     strokes.map((s) => ({

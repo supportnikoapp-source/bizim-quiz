@@ -8,10 +8,12 @@ create table if not exists public.resm_state (
   finished boolean not null default false,
   vote text not null default '',
   seq int not null default 0,
+  advance boolean not null default false,
   updated_at timestamptz not null default now()
 );
 
 alter table public.resm_state add column if not exists seq int not null default 0;
+alter table public.resm_state add column if not exists advance boolean not null default false;
 
 alter table public.resm_state replica identity full;
 alter table public.resm_state enable row level security;
