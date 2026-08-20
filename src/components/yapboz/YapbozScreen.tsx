@@ -59,7 +59,7 @@ function unpackBoard(raw: unknown): PuzzleSlots | null {
   } else {
     return null;
   }
-  if (parts.length < PUZZLE_TOTAL) return null;
+  if (parts.length === 0) return null;
   return Array.from({ length: PUZZLE_TOTAL }, (_, i) => {
     const v = Number(parts[i]);
     return Number.isInteger(v) && v >= 0 ? v : null;
@@ -67,6 +67,7 @@ function unpackBoard(raw: unknown): PuzzleSlots | null {
 }
 
 export function YapbozScreen({ who, onBack, onBothDone }: Props) {
+  const partnerWho: PlayerId = who === "ilkin" ? "fidan" : "ilkin";
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [ready, setReady] = useState(false);
@@ -103,6 +104,34 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
     armedRef.current = false;
     const supabase = getSupabase();
     let channel: RealtimeChannel | null = null;
+    let poll: number | null = null;
+
+    function applyPartner(row: Partial<WireState>, fromKey?: string) {
+      const id = (row.who || fromKey) as PlayerId | undefined;
+      if (!id || id === who) return;
+      setTheyHere(true);
+      if (typeof row.ready === "boolean") {
+        theyReadyRef.current = row.ready;
+        if (row.ready && readyRef.current) setPlaying(true);
+      }
+      const nextSlots = unpackBoard(row.board);
+      if (nextSlots) setTheirSlots(nextSlots);
+      if (row.finished || row.won) {
+        theyFinishedRef.current = true;
+        setTheyFinished(true);
+        if (iFinishedRef.current) onBothDoneRef.current();
+      }
+    }
+
+    async function pullPartner() {
+      const { data, error } = await supabase
+        .from("yapboz_state")
+        .select("who, board, ready, finished")
+        .eq("who", partnerWho)
+        .maybeSingle();
+      if (error || !data) return;
+      applyPartner(data as WireState);
+    }
 
     async function connect() {
       try {
@@ -111,45 +140,36 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
 
         channel = supabase.channel(CHANNEL, {
           config: {
+            private: false,
             presence: { key: who },
-            broadcast: { ack: false, self: false },
+            broadcast: { ack: true, self: false },
           },
         });
         channelRef.current = channel;
-
-        const applyPartner = (row: Partial<WireState>) => {
-          if (!row.who || row.who === who) return;
-          setTheyHere(true);
-          if (typeof row.ready === "boolean") {
-            theyReadyRef.current = row.ready;
-            if (row.ready && readyRef.current) setPlaying(true);
-          }
-          const nextSlots = unpackBoard(row.board);
-          if (nextSlots) setTheirSlots(nextSlots);
-          if (row.finished || row.won) {
-            theyFinishedRef.current = true;
-            setTheyFinished(true);
-            if (iFinishedRef.current) onBothDoneRef.current();
-          }
-        };
 
         const applyPresence = () => {
           if (!channel || !armedRef.current) return;
           const state = channel.presenceState<WireState>();
           let partnerHere = false;
-          for (const rows of Object.values(state)) {
+          for (const [key, rows] of Object.entries(state)) {
+            if (key === who) continue;
             const row = pickPresence(rows);
-            if (!row || row.who === who) continue;
+            if (!row) continue;
             partnerHere = true;
-            applyPartner(row);
+            applyPartner({ ...row, who: (row.who || key) as PlayerId }, key);
           }
-          setTheyHere(partnerHere);
+          if (partnerHere) setTheyHere(true);
         };
 
-        channel.on("presence", { event: "sync" }, applyPresence);
-        channel.on("broadcast", { event: "yapboz" }, ({ payload }) => {
-          applyPartner(payload as WireState);
-        });
+        channel
+          .on("presence", { event: "sync" }, applyPresence)
+          .on("broadcast", { event: "yapboz" }, ({ payload }) => {
+            applyPartner(payload as WireState);
+          })
+          .on("postgres_changes", { event: "*", schema: "public", table: "yapboz_state" }, (payload) => {
+            const row = payload.new as WireState | undefined;
+            if (row) applyPartner(row);
+          });
 
         channel.subscribe(async (status) => {
           if (status !== "SUBSCRIBED" || cancelled || !channel) return;
@@ -160,11 +180,23 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
             board: packBoard(emptySlots()),
             finished: false,
           } satisfies WireState);
+          await supabase.from("yapboz_state").upsert({
+            who,
+            board: packBoard(emptySlots()),
+            ready: false,
+            finished: false,
+            updated_at: new Date().toISOString(),
+          });
           if (cancelled) return;
           armedRef.current = true;
           setConnected(true);
           applyPresence();
+          void pullPartner();
         });
+
+        poll = window.setInterval(() => {
+          void pullPartner();
+        }, 700);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Otaq açılmadı");
       }
@@ -176,9 +208,10 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
       cancelled = true;
       armedRef.current = false;
       channelRef.current = null;
+      if (poll !== null) window.clearInterval(poll);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [who]);
+  }, [who, partnerWho]);
 
   async function push(next: Partial<Pick<WireState, "ready" | "board" | "finished">> = {}) {
     const payload: WireState = {
@@ -189,9 +222,17 @@ export function YapbozScreen({ who, onBack, onBothDone }: Props) {
       finished: next.finished ?? iFinishedRef.current,
     };
     const ch = channelRef.current;
-    if (!ch) return;
-    await ch.track(payload);
-    await ch.send({ type: "broadcast", event: "yapboz", payload });
+    if (ch) {
+      await ch.track(payload);
+      await ch.send({ type: "broadcast", event: "yapboz", payload });
+    }
+    await getSupabase().from("yapboz_state").upsert({
+      who,
+      board: payload.board,
+      ready: payload.ready,
+      finished: payload.finished,
+      updated_at: new Date().toISOString(),
+    });
   }
 
   async function pressStart() {
