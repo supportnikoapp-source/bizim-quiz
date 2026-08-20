@@ -224,7 +224,7 @@ export function YapbozScreen({ who, onBack }: Props) {
 
   return (
     <LandscapeFrame>
-      <div className="relative flex h-full w-full flex-col px-3 py-2">
+      <div className="relative flex h-full w-full flex-col px-2 py-1">
         <header className="mb-1 flex items-center justify-between gap-2">
           <button
             type="button"
@@ -257,31 +257,37 @@ export function YapbozScreen({ who, onBack }: Props) {
         {error ? <p className="text-center text-sm text-rose-500">{error}</p> : null}
 
         {!playing ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
-            <div className="flex max-h-[58%] w-full justify-center gap-4">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 gap-3">
               {PLAYERS.map((p) => (
-                <figure key={p.id} className="flex h-full w-[38%] flex-col items-center">
+                <figure key={p.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <div
-                    className={`flex max-h-[46vh] overflow-hidden rounded-2xl border-4 ${
+                    className={`min-h-0 flex-1 overflow-hidden rounded-2xl border-4 ${
                       p.id === "ilkin" ? "border-[#93c5fd]" : "border-[#f9a8d4]"
                     }`}
                   >
                     <img
                       src={p.id === "ilkin" ? "/puzzles/ilkin.png" : "/puzzles/fidan.png"}
                       alt={p.name}
-                      className="h-full max-h-[46vh] w-auto object-contain"
+                      className="h-full w-full object-cover object-[center_20%]"
                     />
                   </div>
-                  <figcaption className="mt-1 text-sm font-bold">{p.name}</figcaption>
+                  <figcaption
+                    className={`mt-1 text-center text-sm font-bold ${
+                      p.id === "ilkin" ? "text-[#2563eb]" : "text-[#db2777]"
+                    }`}
+                  >
+                    {p.name}
+                  </figcaption>
                 </figure>
               ))}
             </div>
-            <p className="text-center text-[13px] text-[#4b5563]">
+            <p className="shrink-0 px-2 py-1 text-center text-[12px] text-[#4b5563]">
               {who === "ilkin" ? "Sən Fidanın şəklini yığacaqsan." : "Sən İlkinin şəklini yığacaqsan."} Şəklə bax,
               sonra hər ikiniz Başla basanda oyun eyni vaxtda açılır.
             </p>
             {waitingPartner ? (
-              <p className="text-sm text-[#6b7280]">
+              <p className="shrink-0 pb-1 text-center text-sm text-[#6b7280]">
                 {!connected ? "Qoşulur…" : `${partnerName} gözlənilir…`}
               </p>
             ) : (
@@ -289,7 +295,7 @@ export function YapbozScreen({ who, onBack }: Props) {
                 type="button"
                 disabled={ready}
                 onClick={() => void pressStart()}
-                className="min-h-[46px] rounded-full bg-[#3b82f6] px-10 text-[15px] font-semibold text-white disabled:opacity-60"
+                className="mx-auto mb-1 min-h-[42px] shrink-0 rounded-full bg-[#3b82f6] px-10 text-[15px] font-semibold text-white disabled:opacity-60"
               >
                 {ready ? `${partnerName} Başla basmasını gözləyirik…` : "Başla"}
               </button>
