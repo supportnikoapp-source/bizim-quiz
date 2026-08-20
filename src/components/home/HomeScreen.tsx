@@ -5,11 +5,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { HostsIntro } from "@/components/home/HostsIntro";
 import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
+import { GorushScreen } from "@/components/gorush/GorushScreen";
 import { LabirintScreen } from "@/components/labirint/LabirintScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro" | "yapboz" | "labirint" | "next";
+type Step = "who" | "intro" | "yapboz" | "labirint" | "gorush" | "next";
 
 /** Müvəqqəti yoxlama keçidi — oyunlar bitəndə sil. */
 const DEV_SKIP = true;
@@ -58,9 +59,10 @@ export function HomeScreen() {
             Davam et →
           </button>
           {DEV_SKIP && who ? (
-            <div className="mt-3 flex justify-center gap-2">
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               <SkipBtn onClick={() => setStep("yapboz")} label="Yapboza keç" />
               <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
+              <SkipBtn onClick={() => setStep("gorush")} label="Görüşə keç" />
             </div>
           ) : null}
         </motion.div>
@@ -77,7 +79,15 @@ export function HomeScreen() {
           key="labirint"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("next")}
+          onBothDone={() => setStep("gorush")}
+          onSkipLobby={DEV_SKIP ? true : undefined}
+        />
+      ) : step === "gorush" && who ? (
+        <GorushScreen
+          key="gorush"
+          who={who}
+          onBack={() => setStep("intro")}
+          onBothWon={() => setStep("next")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
       ) : step === "next" && who ? (
@@ -90,9 +100,10 @@ export function HomeScreen() {
           onStart={() => setStep("yapboz")}
           extra={
             DEV_SKIP ? (
-              <div className="mt-4 flex justify-center gap-2">
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
                 <SkipBtn onClick={() => setStep("yapboz")} label="Yapboza keç" />
                 <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
+                <SkipBtn onClick={() => setStep("gorush")} label="Görüşə keç" />
               </div>
             ) : null
           }
