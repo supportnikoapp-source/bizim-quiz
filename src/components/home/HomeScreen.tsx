@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { GateQuestion } from "@/components/home/GateQuestion";
 import { HostsIntro } from "@/components/home/HostsIntro";
 import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
+import { WinSplash } from "@/components/home/WinSplash";
 import { AdScreen } from "@/components/ad/AdScreen";
 import { GorushScreen } from "@/components/gorush/GorushScreen";
 import { LabirintScreen } from "@/components/labirint/LabirintScreen";
 import { ResmScreen } from "@/components/resm/ResmScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
+import { addScore, type GameResult, type Score } from "@/lib/score";
 
 type Step = "who" | "intro" | "gate" | "yapboz" | "labirint" | "gorush" | "resm" | "ad" | "next";
 
@@ -33,8 +35,32 @@ function SkipBtn({ onClick, label = "Keç →" }: { onClick: () => void; label?:
 export function HomeScreen() {
   const [step, setStep] = useState<Step>("who");
   const [who, setWho] = useState<PlayerId | null>(null);
+  const [score, setScore] = useState<Score>({ ilkin: 0, fidan: 0 });
+  const [splash, setSplash] = useState<{
+    result: GameResult;
+    next: Step;
+    score: Score;
+  } | null>(null);
+  const finishingRef = useRef(false);
+
+  function finishGame(result: GameResult, next: Step) {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    const nextScore = addScore(score, result);
+    setScore(nextScore);
+    setSplash({ result, next, score: nextScore });
+  }
+
+  function closeSplash() {
+    if (!splash) return;
+    const next = splash.next;
+    setSplash(null);
+    finishingRef.current = false;
+    setStep(next);
+  }
 
   return (
+    <>
     <AnimatePresence mode="wait">
       {step === "who" ? (
         <motion.div
@@ -76,14 +102,17 @@ export function HomeScreen() {
           key="gate"
           who={who}
           onBack={() => setStep("intro")}
-          onPass={() => setStep("yapboz")}
+          onPass={() => {
+            setScore({ ilkin: 0, fidan: 0 });
+            setStep("yapboz");
+          }}
         />
       ) : step === "yapboz" && who ? (
         <YapbozScreen
           key="yapboz"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("labirint")}
+          onBothDone={(result) => finishGame(result, "labirint")}
           onSkip={DEV_SKIP ? () => setStep("labirint") : undefined}
         />
       ) : step === "labirint" && who ? (
@@ -91,7 +120,7 @@ export function HomeScreen() {
           key="labirint"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("gorush")}
+          onBothDone={(result) => finishGame(result, "gorush")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
       ) : step === "gorush" && who ? (
@@ -99,7 +128,7 @@ export function HomeScreen() {
           key="gorush"
           who={who}
           onBack={() => setStep("intro")}
-          onBothWon={() => setStep("resm")}
+          onBothWon={() => finishGame({ type: "both" }, "resm")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
       ) : step === "resm" && who ? (
@@ -107,7 +136,7 @@ export function HomeScreen() {
           key="resm"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("ad")}
+          onBothDone={(result) => finishGame(result, "ad")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
       ) : step === "ad" && who ? (
@@ -115,11 +144,11 @@ export function HomeScreen() {
           key="ad"
           who={who}
           onBack={() => setStep("intro")}
-          onBothDone={() => setStep("next")}
+          onBothDone={(result) => finishGame(result, "next")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
       ) : step === "next" && who ? (
-        <NextGameScreen key="next" who={who} onBack={() => setStep("intro")} />
+        <NextGameScreen key="next" who={who} score={score} onBack={() => setStep("intro")} />
       ) : who ? (
         <HostsIntro
           key="intro"
@@ -140,5 +169,17 @@ export function HomeScreen() {
         />
       ) : null}
     </AnimatePresence>
+    <AnimatePresence>
+      {splash ? (
+        <WinSplash
+          key="splash"
+          result={splash.result}
+          score={splash.score}
+          last={splash.next === "next"}
+          onDone={closeSplash}
+        />
+      ) : null}
+    </AnimatePresence>
+    </>
   );
 }

@@ -14,11 +14,12 @@ import {
 import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "@/components/yapboz/LandscapeFrame";
+import type { GameResult } from "@/lib/score";
 
 type Props = {
   who: PlayerId;
   onBack: () => void;
-  onBothDone: () => void;
+  onBothDone: (result: GameResult) => void;
   onSkipLobby?: boolean;
 };
 
@@ -53,6 +54,7 @@ export function AdScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const wordsRef = useRef<string[]>([]);
+  const theirWordsRef = useRef<string[]>([]);
   const readyRef = useRef(false);
   const theyReadyRef = useRef(false);
   const finishedRef = useRef(false);
@@ -75,6 +77,7 @@ export function AdScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   onBothDoneRef.current = onBothDone;
 
   wordsRef.current = words;
+  theirWordsRef.current = theirWords;
   readyRef.current = ready;
   phaseRef.current = phase;
   myAdvanceRef.current = myAdvance;
@@ -307,7 +310,13 @@ export function AdScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
 
   function goNext() {
     if (phaseRef.current !== "result") return;
-    onBothDoneRef.current();
+    const mine = wordsRef.current.length;
+    const theirs = theirWordsRef.current.length;
+    const result: GameResult =
+      mine === theirs
+        ? { type: "tie" }
+        : { type: "one", winner: mine > theirs ? who : partnerWho };
+    onBothDoneRef.current(result);
   }
   goNextRef.current = goNext;
 

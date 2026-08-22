@@ -18,11 +18,12 @@ import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "@/components/yapboz/LandscapeFrame";
 import { MazeBoard } from "./MazeBoard";
+import type { GameResult } from "@/lib/score";
 
 type Props = {
   who: PlayerId;
   onBack: () => void;
-  onBothDone: () => void;
+  onBothDone: (result: GameResult) => void;
   onSkipLobby?: boolean;
 };
 
@@ -85,6 +86,12 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
   const partnerSeqRef = useRef(-1);
   const onBothDoneRef = useRef(onBothDone);
   onBothDoneRef.current = onBothDone;
+  const finishBothRef = useRef(() => {});
+  function finishBoth() {
+    const winner = winnerRef.current ?? who;
+    onBothDoneRef.current({ type: "one", winner });
+  }
+  finishBothRef.current = finishBoth;
 
   posRef.current = myPos;
   trailRef.current = myTrail;
@@ -137,7 +144,7 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
           winnerRef.current = partnerWho;
           setWinner(partnerWho);
         }
-        if (iFinishedRef.current) onBothDoneRef.current();
+        if (iFinishedRef.current) finishBothRef.current();
       }
     }
 
@@ -317,7 +324,7 @@ export function LabirintScreen({ who, onBack, onBothDone, onSkipLobby }: Props) 
         winnerRef.current = who;
         setWinner(who);
       }
-      if (theyFinishedRef.current) onBothDoneRef.current();
+      if (theyFinishedRef.current) finishBoth();
     }
     void push({
       ready: true,

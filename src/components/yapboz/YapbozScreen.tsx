@@ -7,11 +7,12 @@ import { ensureAnonSession, getSupabase } from "@/lib/supabase/client";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "./LandscapeFrame";
 import { emptySlots, PuzzleBoard, puzzleComplete, PUZZLE_TOTAL, type PuzzleSlots } from "./PuzzleBoard";
+import type { GameResult } from "@/lib/score";
 
 type Props = {
   who: PlayerId;
   onBack: () => void;
-  onBothDone: () => void;
+  onBothDone: (result: GameResult) => void;
   onSkip?: () => void;
 };
 
@@ -86,10 +87,17 @@ export function YapbozScreen({ who, onBack, onBothDone, onSkip }: Props) {
   const theyReadyRef = useRef(false);
   const iFinishedRef = useRef(false);
   const theyFinishedRef = useRef(false);
+  const firstRef = useRef<PlayerId | null>(null);
   const sessionRef = useRef(crypto.randomUUID());
   const armedRef = useRef(false);
   const onBothDoneRef = useRef(onBothDone);
   onBothDoneRef.current = onBothDone;
+  const finishBothRef = useRef(() => {});
+  function finishBoth() {
+    const winner = firstRef.current ?? who;
+    onBothDoneRef.current({ type: "one", winner });
+  }
+  finishBothRef.current = finishBoth;
   slotsRef.current = mySlots;
   readyRef.current = ready;
 
@@ -120,7 +128,8 @@ export function YapbozScreen({ who, onBack, onBothDone, onSkip }: Props) {
       if (row.finished || row.won) {
         theyFinishedRef.current = true;
         setTheyFinished(true);
-        if (iFinishedRef.current) onBothDoneRef.current();
+        if (!firstRef.current) firstRef.current = partnerWho;
+        if (iFinishedRef.current) finishBothRef.current();
       }
     }
 
@@ -255,8 +264,9 @@ export function YapbozScreen({ who, onBack, onBothDone, onSkip }: Props) {
     if (iFinishedRef.current || !puzzleComplete(slotsRef.current)) return;
     iFinishedRef.current = true;
     setIFinished(true);
+    if (!firstRef.current) firstRef.current = who;
     await push({ ready: true, finished: true });
-    if (theyFinishedRef.current) onBothDoneRef.current();
+    if (theyFinishedRef.current) finishBoth();
   }
 
   function peek() {

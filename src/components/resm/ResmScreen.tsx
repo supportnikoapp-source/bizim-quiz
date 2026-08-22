@@ -18,11 +18,12 @@ import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { LandscapeFrame } from "@/components/yapboz/LandscapeFrame";
 import { DrawCanvas } from "./DrawCanvas";
 import { StrokePreview } from "./StrokePreview";
+import type { GameResult } from "@/lib/score";
 
 type Props = {
   who: PlayerId;
   onBack: () => void;
-  onBothDone: () => void;
+  onBothDone: (result: GameResult) => void;
   onSkipLobby?: boolean;
 };
 
@@ -72,6 +73,7 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   const theyVoteRef = useRef("");
   const myAdvanceRef = useRef(false);
   const theyAdvanceRef = useRef(false);
+  const winsRef = useRef({ ilkin: 0, fidan: 0 });
   const sessionRef = useRef(crypto.randomUUID());
   const armedRef = useRef(false);
   const seqRef = useRef(0);
@@ -350,7 +352,9 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
   function goNext() {
     if (phaseRef.current !== "result") return;
     if (roundRef.current >= RESM_PROMPTS.length - 1) {
-      onBothDoneRef.current();
+      const w = winsRef.current;
+      const winner: PlayerId = w.ilkin > w.fidan ? "ilkin" : "fidan";
+      onBothDoneRef.current({ type: "one", winner });
       return;
     }
     startRound(roundRef.current + 1);
@@ -390,10 +394,12 @@ export function ResmScreen({ who, onBack, onBothDone, onSkipLobby }: Props) {
     if (phase !== "compare" || !myVote || !theirVote) return;
     const t = window.setTimeout(() => {
       setWins((w) => {
-        if (myVote === theirVote && (myVote === "ilkin" || myVote === "fidan")) {
-          return { ...w, [myVote]: w[myVote as PlayerId] + 1 };
-        }
-        return w;
+        const next =
+          myVote === theirVote && (myVote === "ilkin" || myVote === "fidan")
+            ? { ...w, [myVote]: w[myVote as PlayerId] + 1 }
+            : w;
+        winsRef.current = next;
+        return next;
       });
       phaseRef.current = "result";
       setPhase("result");

@@ -96,7 +96,7 @@ export function GorushScreen({ who, onBack, onBothWon, onSkipLobby }: Props) {
       finished: true,
     });
     if (winTimerRef.current !== null) window.clearTimeout(winTimerRef.current);
-    winTimerRef.current = window.setTimeout(() => onBothWonRef.current(), 1800);
+    winTimerRef.current = window.setTimeout(() => onBothWonRef.current(), 400);
   }
 
   useEffect(() => {
