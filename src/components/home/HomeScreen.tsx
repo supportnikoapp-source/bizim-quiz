@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { GateQuestion } from "@/components/home/GateQuestion";
 import { HostsIntro } from "@/components/home/HostsIntro";
 import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
@@ -12,7 +13,7 @@ import { ResmScreen } from "@/components/resm/ResmScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro" | "yapboz" | "labirint" | "gorush" | "resm" | "ad" | "next";
+type Step = "who" | "intro" | "gate" | "yapboz" | "labirint" | "gorush" | "resm" | "ad" | "next";
 
 /** Müvəqqəti yoxlama keçidi — oyunlar bitəndə sil. */
 const DEV_SKIP = true;
@@ -70,6 +71,13 @@ export function HomeScreen() {
             </div>
           ) : null}
         </motion.div>
+      ) : step === "gate" && who ? (
+        <GateQuestion
+          key="gate"
+          who={who}
+          onBack={() => setStep("intro")}
+          onPass={() => setStep("yapboz")}
+        />
       ) : step === "yapboz" && who ? (
         <YapbozScreen
           key="yapboz"
@@ -117,7 +125,7 @@ export function HomeScreen() {
           key="intro"
           who={who}
           onBack={() => setStep("who")}
-          onStart={() => setStep("yapboz")}
+          onStart={() => setStep("gate")}
           extra={
             DEV_SKIP ? (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
