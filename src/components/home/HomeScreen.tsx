@@ -5,13 +5,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { HostsIntro } from "@/components/home/HostsIntro";
 import { NextGameScreen } from "@/components/home/NextGameScreen";
 import { WhoAreYou } from "@/components/home/WhoAreYou";
+import { AdScreen } from "@/components/ad/AdScreen";
 import { GorushScreen } from "@/components/gorush/GorushScreen";
 import { LabirintScreen } from "@/components/labirint/LabirintScreen";
 import { ResmScreen } from "@/components/resm/ResmScreen";
 import { YapbozScreen } from "@/components/yapboz/YapbozScreen";
 import { type PlayerId } from "@/data/players";
 
-type Step = "who" | "intro" | "yapboz" | "labirint" | "gorush" | "resm" | "next";
+type Step = "who" | "intro" | "yapboz" | "labirint" | "gorush" | "resm" | "ad" | "next";
 
 /** Müvəqqəti yoxlama keçidi — oyunlar bitəndə sil. */
 const DEV_SKIP = true;
@@ -65,6 +66,7 @@ export function HomeScreen() {
               <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
               <SkipBtn onClick={() => setStep("gorush")} label="Görüşə keç" />
               <SkipBtn onClick={() => setStep("resm")} label="Rəsmə keç" />
+              <SkipBtn onClick={() => setStep("ad")} label="Söz tap keç" />
             </div>
           ) : null}
         </motion.div>
@@ -97,6 +99,14 @@ export function HomeScreen() {
           key="resm"
           who={who}
           onBack={() => setStep("intro")}
+          onBothDone={() => setStep("ad")}
+          onSkipLobby={DEV_SKIP ? true : undefined}
+        />
+      ) : step === "ad" && who ? (
+        <AdScreen
+          key="ad"
+          who={who}
+          onBack={() => setStep("intro")}
           onBothDone={() => setStep("next")}
           onSkipLobby={DEV_SKIP ? true : undefined}
         />
@@ -115,6 +125,7 @@ export function HomeScreen() {
                 <SkipBtn onClick={() => setStep("labirint")} label="Labirintə keç" />
                 <SkipBtn onClick={() => setStep("gorush")} label="Görüşə keç" />
                 <SkipBtn onClick={() => setStep("resm")} label="Rəsmə keç" />
+                <SkipBtn onClick={() => setStep("ad")} label="Söz tap keç" />
               </div>
             ) : null
           }
