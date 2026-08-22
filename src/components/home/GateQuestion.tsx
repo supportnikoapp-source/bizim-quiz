@@ -9,7 +9,7 @@ const OPTIONS = [
   { id: "A", text: "100 faiz" },
   { id: "B", text: "alınmaz" },
   { id: "C", text: "olmaz" },
-  { id: "D", text: "alınan deyil" },
+  { id: "D", text: "nəm" },
 ] as const;
 
 const CORRECT = "A";
